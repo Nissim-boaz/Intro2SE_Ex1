@@ -1,0 +1,3 @@
+# NRRD data files
+# Place your .nrrd files here (e.g. mrhead.nrrd)
+# Files are not tracked by Git (see .gitignore)
