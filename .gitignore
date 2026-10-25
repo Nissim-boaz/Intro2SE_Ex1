@@ -7,12 +7,9 @@ __pycache__/
 dist/
 build/
 
-# Data files (too large for Git)
-data/*.nrrd
-data/*.mp4
-
 # Output videos
 *.mp4
+data/*.mp4
 
 # Environment
 .env
