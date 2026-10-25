@@ -32,7 +32,7 @@ def project(M: np.ndarray, plane: Plane) -> np.ndarray:
     rows = max(1, round(plane.Dab))
     cols = max(1, round(plane.Dbc))
 
-    E = np.zeros((rows, cols), dtype=M.dtype)
+    E = np.zeros((rows, cols), dtype=M.dtype)  # E[y][x]: y=row(Dab), x=col(Dbc)
 
     # Unit vectors along the two legs
     v_ab = (plane.b  - plane.a1) / plane.Dab
@@ -49,7 +49,7 @@ def project(M: np.ndarray, plane: Plane) -> np.ndarray:
 
         if d12 < 1e-9:
             # Apex row: single sample at center
-            _write_sample(M, E, a1, cols // 2, y, sx, sy, sz)
+            _write_sample(M, E, a1, y, cols // 2, sx, sy, sz)
             continue
 
         dp = (a2 - a1) / d12
@@ -63,7 +63,7 @@ def project(M: np.ndarray, plane: Plane) -> np.ndarray:
         iy = np.round(points[:, 1]).astype(int)
         iz = np.round(points[:, 2]).astype(int)
 
-        # x positions in E (centered)
+        # x positions in E (centered), clipped to valid column range
         x_offset = round(cols / 2 - d12 / 2)
         x_indices = np.clip(x_offset + t.astype(int), 0, cols - 1)
 
@@ -82,13 +82,15 @@ def project(M: np.ndarray, plane: Plane) -> np.ndarray:
         values = M[ix_s, iy_s, iz_s]
         values[~in_bounds] = 0
 
-        E[x_indices, y] = values
+        # E[y, x]: y = row (Dab direction), x = col (Dbc direction)
+        E[y, x_indices] = values
 
     return E
 
 
-def _write_sample(M, E, p, x, y, sx, sy, sz):
-    """Write a single voxel sample into E at position (x, y)."""
+def _write_sample(M, E, p, y, x, sx, sy, sz):
+    """Write a single voxel sample into E at position (y, x)."""
     ix, iy, iz = round(p[0]), round(p[1]), round(p[2])
     if 0 <= ix < sx and 0 <= iy < sy and 0 <= iz < sz:
-        E[x, y] = M[ix, iy, iz]
+        E[y, x] = M[ix, iy, iz]
+

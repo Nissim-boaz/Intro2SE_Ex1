@@ -108,3 +108,4 @@ class TestProjector:
         plane = Plane([a1, a2, b, c])
         E = project(M, plane)
         assert E.shape[0] > 0 and E.shape[1] > 0
+

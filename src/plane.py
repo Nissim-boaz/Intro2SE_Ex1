@@ -55,13 +55,13 @@ class Plane:
         if dab < EPS or dac < EPS or dbc < EPS:
             raise ValueError("Degenerate triangle: at least one side has zero length.")
 
+        if _are_collinear(a, b, c):
+            raise ValueError("Degenerate triangle: points are collinear.")
+
         if abs(dab - dac) >= EPS:
             raise ValueError(
                 f"Not an isosceles triangle: dist(a,b)={dab:.4f}, dist(a,c)={dac:.4f}."
             )
-
-        if _are_collinear(a, b, c):
-            raise ValueError("Degenerate triangle: points are collinear.")
 
         self.a1 = a
         self.a2 = a          # both walkers start at the apex
@@ -137,3 +137,4 @@ def _are_coplanar(a1, a2, b, c) -> bool:
     n /= norm
     # The fourth point (a2) must lie on the plane defined by a1, b, c
     return abs(float(np.dot(a2 - a1, n))) < EPS
+
