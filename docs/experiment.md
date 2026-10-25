@@ -41,3 +41,4 @@ python Ex0.py data/MRHead_1.nrrd data/professor_planes.csv experiment_output.mp4
    - The system correctly identified the geometric violations, printed clear warnings with the row numbers, and generated explicit on-screen notice slides in the output video (`INVALID PLANE - SKIPPED`) rather than crashing.
 3. **High-Performance Vectorization:**
    - The NumPy vectorized coordinate mapping and batch indexing achieved **104.8 FPS**, well exceeding the 30 FPS threshold required by the assignment.
+
