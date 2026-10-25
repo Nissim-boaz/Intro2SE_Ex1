@@ -46,3 +46,4 @@ python gui.py
 - [Software Requirements Specification (SRS)](docs/SRS.md)
 - [Algorithm Detailed Design](docs/algorithm.md)
 - [Testing Strategy](docs/testing.md)
+- [Experiment Results](docs/experiment.md)
