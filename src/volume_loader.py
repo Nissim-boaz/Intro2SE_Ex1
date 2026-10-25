@@ -7,7 +7,10 @@ import numpy as np
 import nrrd
 
 
-SUPPORTED_DTYPES = (np.uint8, np.uint16, np.uint32)
+SUPPORTED_DTYPES = (
+    np.uint8, np.uint16, np.uint32,
+    np.int8, np.int16, np.int32
+)
 MAX_DIM = 1024  # each dimension must be < 2^10
 
 
@@ -51,13 +54,13 @@ def load(path: str) -> np.ndarray:
         )
 
     if data.dtype not in [np.dtype(t) for t in SUPPORTED_DTYPES]:
-        # Try to cast unsigned integers of other widths
-        if np.issubdtype(data.dtype, np.unsignedinteger):
-            data = data.astype(np.uint32)
+        # Try to cast integers of other widths
+        if np.issubdtype(data.dtype, np.integer):
+            data = data.astype(np.int32)
         else:
             raise ValueError(
                 f"Unsupported dtype '{data.dtype}'. "
-                f"Expected unsigned integer (uint8, uint16, uint32)."
+                f"Expected integer format (e.g. int16, uint16, uint8)."
             )
 
     # Ensure C-contiguous layout for fast indexing
@@ -65,3 +68,4 @@ def load(path: str) -> np.ndarray:
 
     print(f"[VolumeLoader] Loaded '{path}': shape={data.shape}, dtype={data.dtype}")
     return data
+
