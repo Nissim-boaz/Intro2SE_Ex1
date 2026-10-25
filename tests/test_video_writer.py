@@ -17,16 +17,16 @@ class TestVideoWriter:
         return [np.random.randint(0, 256, (rows, cols), dtype=dtype) for _ in range(n)]
 
     def test_VW1_frame_count(self, tmp_path):
-        """VW-1: output MP4 has exactly N frames."""
+        """VW-1: output MP4 has N * repeat_count frames for 3s display."""
         N = 5
         frames = self._make_frames(N)
         out = str(tmp_path / "out.mp4")
-        write(frames, out)
+        write(frames, out, fps=30, seconds_per_frame=3.0)
 
         cap = cv2.VideoCapture(out)
         count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         cap.release()
-        assert count == N
+        assert count == N * 90  # 5 frames * 3s * 30fps = 450
 
     def test_VW2_padding_different_sizes(self, tmp_path):
         """VW-2: frames of different sizes are padded to max dimensions."""
@@ -60,3 +60,4 @@ class TestVideoWriter:
         """Empty frame list raises ValueError."""
         with pytest.raises(ValueError, match="[Nn]o frames"):
             write([], str(tmp_path / "out.mp4"))
+

@@ -11,24 +11,26 @@ import numpy as np
 
 
 def write(frames: list[np.ndarray], path: str, fps: int = 30,
-          vmin: int = 0, vmax: int = 255) -> None:
+          vmin: int = 0, vmax: int = 255, seconds_per_frame: float = 3.0) -> None:
     """
     Write a list of 2D frames to an MP4 video.
 
     All frames are padded with zeros (black) to the maximum width and
     height among all frames, so every frame has the same size.
+    Each frame is displayed for `seconds_per_frame` seconds.
 
     Parameters
     ----------
     frames : list of np.ndarray
-        2D arrays (projection images). Any unsigned integer dtype.
+        2D arrays (projection images).
     path : str
         Output .mp4 file path (overwritten if it exists).
     fps : int
         Video frame rate (default 30).
     vmin, vmax : int
         Value range used for linear normalization to 8-bit.
-        Typically the global min/max of the volume.
+    seconds_per_frame : float
+        Duration in seconds to display each plane image (default 3.0).
 
     Raises
     ------
@@ -51,6 +53,7 @@ def write(frames: list[np.ndarray], path: str, fps: int = 30,
         raise RuntimeError(f"Cannot open video writer for path '{path}'.")
 
     scale = 255.0 / max(vmax - vmin, 1)
+    repeat_count = max(1, int(round(fps * seconds_per_frame)))
 
     for frame in frames:
         # Normalize to 8-bit
@@ -61,7 +64,11 @@ def write(frames: list[np.ndarray], path: str, fps: int = 30,
         r, c = normalized.shape
         padded[:r, :c] = normalized
 
-        writer.write(padded)
+        # Repeat frame so it is shown for `seconds_per_frame` seconds
+        for _ in range(repeat_count):
+            writer.write(padded)
 
     writer.release()
-    print(f"[VideoWriter] Wrote {len(frames)} frames → '{path}' ({max_cols}×{max_rows} @ {fps} fps)")
+    total_written = len(frames) * repeat_count
+    print(f"[VideoWriter] Wrote {len(frames)} plane(s) ({total_written} total video frames) → '{path}' ({max_cols}×{max_rows} @ {fps} fps, {seconds_per_frame}s per slice)")
+
