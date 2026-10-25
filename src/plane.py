@@ -3,6 +3,8 @@ plane.py
 Represents and validates a projection plane defined by 3 or 4 3D points.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 EPS = 0.001  # tolerance for distance comparisons

@@ -6,6 +6,8 @@ The algorithm follows the pseudocode defined in docs/algorithm.md.
 The inner loop is fully vectorized with NumPy for maximum performance.
 """
 
+from __future__ import annotations
+
 import numpy as np
 from src.plane import Plane
 
