@@ -34,7 +34,7 @@ def parse(path: str) -> list[Plane]:
         If the file does not exist.
     """
     try:
-        f = open(path, newline="", encoding="utf-8")
+        f = open(path, newline="", encoding="utf-8-sig")
     except FileNotFoundError:
         raise FileNotFoundError(f"CSV file not found: {path}")
 
@@ -46,23 +46,45 @@ def parse(path: str) -> list[Plane]:
             if not row:
                 continue
 
-            # Try to parse all values as floats
-            try:
-                values = [float(v.strip()) for v in row]
-            except ValueError:
-                # Could be a header row or malformed data
-                print(f"[CSVParser] Row {row_num}: skipped (non-numeric values).")
+            # Clean and strip cells, filter out purely trailing empty strings
+            cleaned_row = [cell.strip() for cell in row]
+
+            # Try to parse numeric values, ignoring empty cells at the end
+            raw_floats = []
+            for cell in cleaned_row:
+                if cell == "":
+                    continue
+                try:
+                    raw_floats.append(float(cell))
+                except ValueError:
+                    raw_floats = None
+                    break
+
+            if raw_floats is None:
+                # Header row or row with text
+                print(f"[CSVParser] Row {row_num}: skipped (header or non-numeric values).")
                 continue
 
-            n = len(values)
-            if n == 9:
-                pts = [np.array(values[i*3:(i+1)*3]) for i in range(3)]
+            if not raw_floats:
+                continue
+
+            n = len(raw_floats)
+
+            # Case A: Format with count column at start (3, x1, y1, z1, ..., or 4, ...)
+            if n in (10, 13) and int(raw_floats[0]) in (3, 4):
+                expected_points = int(raw_floats[0])
+                coords = raw_floats[1:1 + expected_points * 3]
+                pts = [np.array(coords[i*3:(i+1)*3]) for i in range(expected_points)]
+
+            # Case B: Standard 9 (3 points) or 12 (4 points) coordinates directly
+            elif n == 9:
+                pts = [np.array(raw_floats[i*3:(i+1)*3]) for i in range(3)]
             elif n == 12:
-                pts = [np.array(values[i*3:(i+1)*3]) for i in range(4)]
+                pts = [np.array(raw_floats[i*3:(i+1)*3]) for i in range(4)]
             else:
                 print(
                     f"[CSVParser] Row {row_num}: skipped "
-                    f"(expected 9 or 12 values, got {n})."
+                    f"(expected 9, 10, 12, or 13 values, got {n})."
                 )
                 continue
 
@@ -73,3 +95,4 @@ def parse(path: str) -> list[Plane]:
                 print(f"[CSVParser] Row {row_num}: skipped ({e})")
 
     return planes
+
