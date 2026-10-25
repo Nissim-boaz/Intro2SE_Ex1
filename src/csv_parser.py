@@ -6,6 +6,8 @@ Each row must contain either 9 values (3 points) or 12 values (4 points),
 where each point is given as x,y,z.
 """
 
+from __future__ import annotations
+
 import csv
 import numpy as np
 from src.plane import Plane

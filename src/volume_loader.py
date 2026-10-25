@@ -3,6 +3,8 @@ volume_loader.py
 Loads a 3D NRRD file and returns it as a NumPy array M[x][y][z].
 """
 
+from __future__ import annotations
+
 import numpy as np
 import nrrd
 

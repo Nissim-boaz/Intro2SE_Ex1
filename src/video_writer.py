@@ -6,6 +6,8 @@ Voxel values are linearly scaled to 8-bit grayscale using the global
 [min, max] range of the volume, so brightness is consistent across frames.
 """
 
+from __future__ import annotations
+
 import cv2
 import numpy as np
 
