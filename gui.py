@@ -19,7 +19,7 @@ from tkinter import filedialog, messagebox, ttk
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.volume_loader import load
-from src.csv_parser import parse
+from src.csv_parser import parse_entries
 from src.projector import project
 from src.video_writer import write
 
@@ -146,37 +146,50 @@ class ProjectionApp:
 
             # Step 2: Parse CSV
             self._update_status("Parsing CSV planes…")
-            planes = parse(csv_path)
-            if not planes:
-                self._show_error("No valid planes found in the CSV file.")
+            entries = parse_entries(csv_path)
+            if not entries:
+                self._show_error("No plane rows found in the CSV file.")
                 return
             self._update_progress(20)
 
             # Step 3: Project each plane
-            total = len(planes)
+            total = len(entries)
+            valid_count = sum(1 for e in entries if e["status"] == "valid")
             frames = []
+            labels = []
             t_start = time.perf_counter()
 
-            for i, plane in enumerate(planes):
-                frame = project(M, plane)
-                frames.append(frame)
+            for i, entry in enumerate(entries):
+                p_idx = entry["plane_idx"]
+                r_num = entry["row_num"]
+
+                if entry["status"] == "valid":
+                    frame = project(M, entry["plane"])
+                    frames.append(frame)
+                    labels.append(f"Plane {p_idx} (Row {r_num})")
+                else:
+                    frames.append(None)
+                    labels.append(f"Plane {p_idx} (Row {r_num})")
+
                 pct = 20 + int(60 * (i + 1) / total)
                 self._update_progress(pct)
-                self._update_status(f"Projecting plane {i+1}/{total}…")
+                self._update_status(f"Processing plane {i+1}/{total}…")
 
             t_proj = time.perf_counter() - t_start
-            fps = total / t_proj if t_proj > 0 else float("inf")
+            fps = valid_count / t_proj if t_proj > 0 else float("inf")
             self._update_progress(85)
 
             # Step 4: Write video
-            self._update_status("Writing MP4 video…")
-            write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax)
+            self._update_status("Writing MP4 video with annotations…")
+            write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels)
             self._update_progress(100)
 
             # Done!
             result = (
                 f"Done!\n\n"
-                f"Planes processed: {total}\n"
+                f"Total rows in CSV: {total}\n"
+                f"Valid planes: {valid_count}\n"
+                f"Invalid planes: {total - valid_count}\n"
                 f"Projection time: {t_proj:.3f} s\n"
                 f"FPS: {fps:.1f}\n"
                 f"{'✅ PASS' if fps >= 30 else '❌ FAIL'} (requirement: ≥30 FPS)\n\n"

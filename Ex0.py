@@ -16,7 +16,7 @@ import time
 import numpy as np
 
 from src.volume_loader import load
-from src.csv_parser import parse
+from src.csv_parser import parse_entries
 from src.projector import project
 from src.video_writer import write
 
@@ -32,13 +32,14 @@ def main(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
     vmax = int(M.max())
 
     # ── 2. Parse planes ─────────────────────────────────────────────
-    planes = parse(csv_path)
+    entries = parse_entries(csv_path)
 
-    if not planes:
-        print("[Error] No valid planes found in CSV. Exiting.")
+    if not entries:
+        print("[Error] No plane entries found in CSV. Exiting.")
         sys.exit(1)
 
-    print(f"[Main] {len(planes)} valid plane(s) loaded.")
+    valid_count = sum(1 for e in entries if e["status"] == "valid")
+    print(f"[Main] {len(entries)} plane row(s) read ({valid_count} valid).")
 
     # ── 3. Warn if output file already exists ───────────────────────
     if os.path.exists(mp4_path):
@@ -46,24 +47,33 @@ def main(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
 
     # ── 4. Project each plane ────────────────────────────────────────
     frames = []
+    labels = []
     t_start = time.perf_counter()
 
-    for i, plane in enumerate(planes):
-        frame = project(M, plane)
-        frames.append(frame)
+    for entry in entries:
+        p_idx = entry["plane_idx"]
+        r_num = entry["row_num"]
+
+        if entry["status"] == "valid":
+            frame = project(M, entry["plane"])
+            frames.append(frame)
+            labels.append(f"Plane {p_idx} (Row {r_num})")
+        else:
+            frames.append(None)
+            labels.append(f"Plane {p_idx} (Row {r_num})")
 
     t_proj = time.perf_counter() - t_start
-    fps = len(frames) / t_proj if t_proj > 0 else float("inf")
+    fps = valid_count / t_proj if t_proj > 0 else float("inf")
 
     # ── 5. Write video ───────────────────────────────────────────────
-    write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax)
+    write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels)
 
     # ── 6. Summary ───────────────────────────────────────────────────
-    total_rows = len(planes)
     print(
         f"\n── Summary ──────────────────────────────\n"
-        f"  Planes read:    {total_rows}\n"
-        f"  Frames written: {len(frames)}\n"
+        f"  Total planes:   {len(entries)}\n"
+        f"  Valid planes:   {valid_count}\n"
+        f"  Invalid planes: {len(entries) - valid_count}\n"
         f"  Projection time:{t_proj:.3f} s\n"
         f"  Processing FPS: {fps:.1f}\n"
         f"  {'✅ PASS' if fps >= 30 else '❌ FAIL'} (target: ≥30 FPS)\n"
@@ -77,3 +87,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     main(sys.argv[1], sys.argv[2], sys.argv[3])
+
