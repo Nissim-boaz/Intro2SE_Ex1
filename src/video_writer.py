@@ -81,17 +81,16 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
             r, c = normalized.shape
             padded[:r, :c] = normalized
 
-            # Semi-dark label banner at the top-left for readability
+            # Small, discreet corner label tucked in the edge without obstructing the image
             text = label
             font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 0.6
+            font_scale = 0.38
             thickness = 1
             (tw, th), baseline = cv2.getTextSize(text, font, font_scale, thickness)
 
-            # Draw banner background
-            cv2.rectangle(padded, (8, 8), (8 + tw + 14, 8 + th + 14), 0, -1)
-            cv2.rectangle(padded, (8, 8), (8 + tw + 14, 8 + th + 14), 220, 1)
-            cv2.putText(padded, text, (15, 8 + th + 5), font, font_scale, 255, thickness, cv2.LINE_AA)
+            # Minimal dark background box tucked into the very corner
+            cv2.rectangle(padded, (4, 4), (4 + tw + 8, 4 + th + 6), 0, -1)
+            cv2.putText(padded, text, (8, 4 + th + 2), font, font_scale, 220, thickness, cv2.LINE_AA)
 
         # Write frame repeated for seconds_per_frame
         for _ in range(repeat_count):
