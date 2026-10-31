@@ -25,3 +25,5 @@ venv/
 ehthumbs.db
 Thumbs.db
 
+
+.vscode/

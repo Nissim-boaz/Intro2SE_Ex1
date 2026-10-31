@@ -1,8 +1,8 @@
 """
-gui.py – Graphical interface for the 3D plane projection tool.
+gui.py - Graphical interface for the 3D plane projection tool.
 
 Cross-platform (macOS, Windows, Linux).
-Uses tkinter which is built into Python – no extra installation needed.
+Uses tkinter which is built into Python - no extra installation needed.
 
 Launch:
     python gui.py
@@ -32,12 +32,12 @@ class ProjectionApp:
         self.root.title("3D Plane Projection Tool")
         self.root.resizable(False, False)
 
-        # ── Variables ────────────────────────────────────────────────
+        # -- Variables ------------------------------------------------
         self.nrrd_path = tk.StringVar()
         self.csv_path = tk.StringVar()
         self.mp4_path = tk.StringVar()
 
-        # ── Layout ───────────────────────────────────────────────────
+        # -- Layout ---------------------------------------------------
         pad = {"padx": 12, "pady": 6}
 
         # Title
@@ -47,17 +47,17 @@ class ProjectionApp:
         # NRRD file
         tk.Label(root, text="NRRD Volume File:").grid(row=1, column=0, sticky="w", **pad)
         tk.Entry(root, textvariable=self.nrrd_path, width=45).grid(row=1, column=1, **pad)
-        tk.Button(root, text="Browse…", command=self._browse_nrrd).grid(row=1, column=2, **pad)
+        tk.Button(root, text="Browse...", command=self._browse_nrrd).grid(row=1, column=2, **pad)
 
         # CSV file
         tk.Label(root, text="Planes CSV File:").grid(row=2, column=0, sticky="w", **pad)
         tk.Entry(root, textvariable=self.csv_path, width=45).grid(row=2, column=1, **pad)
-        tk.Button(root, text="Browse…", command=self._browse_csv).grid(row=2, column=2, **pad)
+        tk.Button(root, text="Browse...", command=self._browse_csv).grid(row=2, column=2, **pad)
 
         # Output MP4
         tk.Label(root, text="Output Video (.mp4):").grid(row=3, column=0, sticky="w", **pad)
         tk.Entry(root, textvariable=self.mp4_path, width=45).grid(row=3, column=1, **pad)
-        tk.Button(root, text="Save As…", command=self._browse_mp4).grid(row=3, column=2, **pad)
+        tk.Button(root, text="Save As...", command=self._browse_mp4).grid(row=3, column=2, **pad)
 
         # Separator
         ttk.Separator(root, orient="horizontal").grid(row=4, column=0, columnspan=3, sticky="ew", pady=8)
@@ -72,12 +72,12 @@ class ProjectionApp:
 
         # Run button
         self.run_btn = tk.Button(
-            root, text="▶  Run Projection", font=("Helvetica", 13, "bold"),
+            root, text=">  Run Projection", font=("Helvetica", 13, "bold"),
             bg="#4CAF50", fg="white", command=self._start_run, height=2, width=20
         )
         self.run_btn.grid(row=7, column=0, columnspan=3, pady=(4, 16))
 
-    # ── File dialogs ─────────────────────────────────────────────────
+    # -- File dialogs -------------------------------------------------
 
     def _browse_nrrd(self):
         path = filedialog.askopenfilename(
@@ -104,7 +104,7 @@ class ProjectionApp:
         if path:
             self.mp4_path.set(path)
 
-    # ── Run pipeline ─────────────────────────────────────────────────
+    # -- Run pipeline -------------------------------------------------
 
     def _start_run(self):
         """Validate inputs and launch the pipeline in a background thread."""
@@ -141,13 +141,13 @@ class ProjectionApp:
         """Execute the full projection pipeline (runs in background thread)."""
         try:
             # Step 1: Load volume
-            self._update_status("Loading NRRD volume…")
+            self._update_status("Loading NRRD volume...")
             M = load(nrrd_path)
             vmin, vmax = int(M.min()), int(M.max())
             self._update_progress(10)
 
             # Step 2: Parse CSV
-            self._update_status("Parsing CSV planes…")
+            self._update_status("Parsing CSV planes...")
             entries = parse_entries(csv_path)
             if not entries:
                 self._show_error("No plane rows found in the CSV file.")
@@ -175,14 +175,14 @@ class ProjectionApp:
 
                 pct = 20 + int(60 * (i + 1) / total)
                 self._update_progress(pct)
-                self._update_status(f"Processing plane {i+1}/{total}…")
+                self._update_status(f"Processing plane {i+1}/{total}...")
 
             t_proj = time.perf_counter() - t_start
             fps = valid_count / t_proj if t_proj > 0 else float("inf")
             self._update_progress(85)
 
             # Step 4: Write video
-            self._update_status("Writing MP4 video with annotations…")
+            self._update_status("Writing MP4 video with annotations...")
             write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels)
             self._update_progress(100)
 
@@ -194,10 +194,10 @@ class ProjectionApp:
                 f"Invalid planes: {total - valid_count}\n"
                 f"Projection time: {t_proj:.3f} s\n"
                 f"FPS: {fps:.1f}\n"
-                f"{'✅ PASS' if fps >= 30 else '❌ FAIL'} (requirement: ≥30 FPS)\n\n"
+                f"{'[PASS] PASS' if fps >= 30 else '[FAIL] FAIL'} (requirement: >=30 FPS)\n\n"
                 f"Video saved to:\n{mp4_path}"
             )
-            self._update_status(f"✅ Done — {fps:.1f} FPS — {total} frames")
+            self._update_status(f"[PASS] Done - {fps:.1f} FPS - {total} frames")
             self.root.after(0, lambda: messagebox.showinfo("Success", result))
 
         except Exception as e:
@@ -206,7 +206,7 @@ class ProjectionApp:
         finally:
             self.root.after(0, lambda: self.run_btn.config(state="normal"))
 
-    # ── Thread-safe UI updates ───────────────────────────────────────
+    # -- Thread-safe UI updates ---------------------------------------
 
     def _update_status(self, text):
         self.root.after(0, lambda: self.status_var.set(text))
@@ -220,7 +220,7 @@ class ProjectionApp:
         self.root.after(0, lambda: self.run_btn.config(state="normal"))
 
 
-# ── Main ─────────────────────────────────────────────────────────────
+# -- Main -------------------------------------------------------------
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -99,5 +99,5 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
 
     writer.release()
     total_written = len(frames) * repeat_count
-    print(f"[VideoWriter] Wrote {len(frames)} plane entries ({total_written} video frames) → '{path}' ({max_cols}×{max_rows} @ {fps} fps)")
+    print(f"[VideoWriter] Wrote {len(frames)} plane entries ({total_written} video frames) -> '{path}' ({max_cols}x{max_rows} @ {fps} fps)")
 

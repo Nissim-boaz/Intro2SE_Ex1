@@ -2,8 +2,8 @@
 projector.py
 Computes the 2D projection of a 3D volume onto a given plane.
 
-The algorithm follows the pseudocode defined in docs/algorithm.md.
-The inner loop is fully vectorized with NumPy for maximum performance.
+The algorithm follows the specification in docs/algorithm.md.
+The projection is fully vectorized with NumPy for maximum performance.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ def project(M: np.ndarray, plane: Plane) -> np.ndarray:
     Parameters
     ----------
     M : np.ndarray
-        3D volume of shape (sx, sy, sz), unsigned integer dtype.
+        3D volume of shape (sx, sy, sz), integer dtype.
     plane : Plane
         A validated Plane object (triangle or trapezoid).
 
@@ -34,65 +34,41 @@ def project(M: np.ndarray, plane: Plane) -> np.ndarray:
     rows = max(1, round(plane.Dab))
     cols = max(1, round(plane.Dbc))
 
-    E = np.zeros((rows, cols), dtype=M.dtype)  # E[y][x]: y=row(Dab), x=col(Dbc)
+    E = np.zeros((rows, cols), dtype=M.dtype)
 
-    # Unit vectors along the two legs
-    v_ab = (plane.b  - plane.a1) / plane.Dab
-    v_ac = (plane.c  - plane.a2) / plane.Dab
+    v_ab = (plane.b - plane.a1) / plane.Dab
+    dp = (plane.c - plane.b) / plane.Dbc
 
-    a1 = plane.a1.copy().astype(float)
-    a2 = plane.a2.copy().astype(float)
+    d_top = 0.0 if not plane.is_trapezoid else float(np.linalg.norm(plane.a2 - plane.a1))
+    step_slope = (plane.Dbc - d_top) / plane.Dab
 
-    for y in range(rows):
-        a1 += v_ab
-        a2 += v_ac
+    y_vals = np.arange(1, rows + 1, dtype=np.float64)
+    d12 = d_top + y_vals * step_slope
+    n_steps = np.round(d12).astype(np.int32)
+    n_steps[d12 < 1e-9] = 0
+    counts = n_steps + 1
 
-        d12 = float(np.linalg.norm(a2 - a1))
+    y_rep = np.repeat(np.arange(rows, dtype=np.int32), counts)
 
-        if d12 < 1e-9:
-            # Apex row: single sample at center
-            _write_sample(M, E, a1, y, cols // 2, sx, sy, sz)
-            continue
+    ends = np.cumsum(counts)
+    t = np.ones(len(y_rep), dtype=np.int32)
+    t[0] = 0
+    t[ends[:-1]] -= counts[:-1]
+    np.cumsum(t, out=t)
 
-        dp = (a2 - a1) / d12
-        n_steps = round(d12)
+    y_p1 = y_rep + 1
+    ix = np.round(plane.a1[0] + y_p1 * v_ab[0] + t * dp[0]).astype(np.int32)
+    iy = np.round(plane.a1[1] + y_p1 * v_ab[1] + t * dp[1]).astype(np.int32)
+    iz = np.round(plane.a1[2] + y_p1 * v_ab[2] + t * dp[2]).astype(np.int32)
 
-        # --- vectorized inner loop ---
-        t = np.arange(n_steps + 1, dtype=float)          # shape (n_steps+1,)
-        points = a1 + np.outer(t, dp)                    # shape (n_steps+1, 3)
+    x_offset = np.round(cols * 0.5 - d12 * 0.5).astype(np.int32)
+    x_indices = np.clip(x_offset[y_rep] + t, 0, cols - 1)
 
-        ix = np.round(points[:, 0]).astype(int)
-        iy = np.round(points[:, 1]).astype(int)
-        iz = np.round(points[:, 2]).astype(int)
+    in_bounds = (
+        (ix >= 0) & (ix < sx) &
+        (iy >= 0) & (iy < sy) &
+        (iz >= 0) & (iz < sz)
+    )
 
-        # x positions in E (centered), clipped to valid column range
-        x_offset = round(cols / 2 - d12 / 2)
-        x_indices = np.clip(x_offset + t.astype(int), 0, cols - 1)
-
-        # mask: only in-bounds voxels
-        in_bounds = (
-            (ix >= 0) & (ix < sx) &
-            (iy >= 0) & (iy < sy) &
-            (iz >= 0) & (iz < sz)
-        )
-
-        # clamp indices for safe indexing (masked out later)
-        ix_s = np.clip(ix, 0, sx - 1)
-        iy_s = np.clip(iy, 0, sy - 1)
-        iz_s = np.clip(iz, 0, sz - 1)
-
-        values = M[ix_s, iy_s, iz_s]
-        values[~in_bounds] = 0
-
-        # E[y, x]: y = row (Dab direction), x = col (Dbc direction)
-        E[y, x_indices] = values
-
+    E[y_rep[in_bounds], x_indices[in_bounds]] = M[ix[in_bounds], iy[in_bounds], iz[in_bounds]]
     return E
-
-
-def _write_sample(M, E, p, y, x, sx, sy, sz):
-    """Write a single voxel sample into E at position (y, x)."""
-    ix, iy, iz = round(p[0]), round(p[1]), round(p[2])
-    if 0 <= ix < sx and 0 <= iy < sy and 0 <= iz < sz:
-        E[y, x] = M[ix, iy, iz]
-

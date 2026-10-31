@@ -1,6 +1,6 @@
 """
 benchmark.py
-Performance benchmark: measures projection FPS on a synthetic 500³ volume.
+Performance benchmark: measures projection FPS on a synthetic 500^3 volume.
 
 Run:
     python tests/benchmark.py
@@ -25,7 +25,7 @@ VOL_SIZE    = 500   # volume edge length
 
 def make_volume(size):
     """Synthetic uint8 volume of shape (size, size, size)."""
-    print(f"Building {size}³ synthetic volume … ", end="", flush=True)
+    print(f"Building {size}^3 synthetic volume ... ", end="", flush=True)
     x = np.arange(size, dtype=np.uint32).reshape(size, 1, 1)
     y = np.arange(size, dtype=np.uint32).reshape(1, size, 1)
     z = np.arange(size, dtype=np.uint32).reshape(1, 1, size)
@@ -50,7 +50,7 @@ def run():
     M = make_volume(VOL_SIZE)
     planes = make_planes(N_PLANES, VOL_SIZE)
 
-    print(f"Projecting {N_PLANES} planes on {VOL_SIZE}³ volume …")
+    print(f"Projecting {N_PLANES} planes on {VOL_SIZE}^3 volume ...")
     t0 = time.perf_counter()
     for plane in planes:
         project(M, plane)
@@ -58,13 +58,13 @@ def run():
 
     fps = N_PLANES / elapsed
 
-    print(f"\n── Benchmark Results ───────────────────")
+    print(f"\n-- Benchmark Results -------------------")
     print(f"  Planes projected : {N_PLANES}")
     print(f"  Total time       : {elapsed:.3f} s")
     print(f"  FPS              : {fps:.1f}")
-    print(f"  Mandatory (≥{MINIMUM_FPS}) : {'✅ PASS' if fps >= MINIMUM_FPS else '❌ FAIL'}")
-    print(f"  Target    (≥{TARGET_FPS}) : {'✅ PASS' if fps >= TARGET_FPS  else '❌ FAIL'}")
-    print(f"────────────────────────────────────────")
+    print(f"  Mandatory (>={MINIMUM_FPS}) : {'[PASS]' if fps >= MINIMUM_FPS else '[FAIL]'}")
+    print(f"  Target    (>={TARGET_FPS}) : {'[PASS]' if fps >= TARGET_FPS  else '[FAIL]'}")
+    print(f"----------------------------------------")
 
     return fps
 
