@@ -14,7 +14,7 @@ import glob
 import time
 import io
 import contextlib
-from typing import Optional, Tuple
+from typing import List
 
 from src.volume_loader import load
 from src.csv_parser import parse_entries
@@ -33,24 +33,46 @@ def silence_internal_logs():
         sys.stdout = old_stdout
 
 
-def auto_detect_files() -> Tuple[Optional[str], Optional[str]]:
-    """Locates default .nrrd and .csv files in data/ or current directory."""
-    nrrd_candidates = [
-        os.path.join("data", "MRHead_1.nrrd"),
-        *glob.glob(os.path.join("data", "*.nrrd")),
-        *glob.glob("*.nrrd"),
-    ]
-    nrrd_file = next((f for f in nrrd_candidates if os.path.isfile(f)), None)
+def choose_file(extension: str, default_keyword: str = "") -> str:
+    """
+    Finds all files of the given extension in data/ and current directory.
+    If only 1 file exists, returns it immediately without prompting.
+    If multiple files exist, asks the user in English to select one.
+    """
+    candidates: List[str] = list(dict.fromkeys(
+        glob.glob(os.path.join("data", f"*.{extension}")) +
+        glob.glob(f"*.{extension}")
+    ))
+    candidates = [c.replace("\\", "/") for c in candidates]
 
-    csv_candidates = [
-        os.path.join("data", "professor_planes.csv"),
-        os.path.join("data", "50_planes.csv"),
-        *glob.glob(os.path.join("data", "*.csv")),
-        *glob.glob("*.csv"),
-    ]
-    csv_file = next((f for f in csv_candidates if os.path.isfile(f)), None)
+    if not candidates:
+        raise FileNotFoundError(f"No .{extension} files found in project or data/ folder.")
 
-    return nrrd_file, csv_file
+    # Only 1 file of this type -> select automatically without asking
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # Multiple files -> sort so the preferred file is option [1]
+    if default_keyword:
+        candidates.sort(key=lambda x: (0 if default_keyword in x else 1, x))
+
+    print(f"\nMultiple .{extension} files found:")
+    for idx, path in enumerate(candidates, 1):
+        tag = " (default)" if idx == 1 else ""
+        print(f"  [{idx}] {path}{tag}")
+
+    try:
+        choice = input(f"Which .{extension} file would you like to use? [1]: ").strip()
+        if not choice:
+            return candidates[0]
+        if choice.isdigit() and 1 <= int(choice) <= len(candidates):
+            return candidates[int(choice) - 1]
+        for c in candidates:
+            if choice in c:
+                return c
+        return candidates[0]
+    except (EOFError, KeyboardInterrupt):
+        return candidates[0]
 
 
 def run_projection(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
@@ -102,30 +124,27 @@ def main():
     if len(args) == 3:
         nrrd_path, csv_path, mp4_path = args
     elif len(args) == 0:
-        detected_nrrd, detected_csv = auto_detect_files()
-        if not detected_nrrd or not detected_csv:
-            print("[Error] Could not find required .nrrd and .csv files.")
-            print("Usage: python main.py <file.nrrd> <file.csv> <file.mp4>")
-            sys.exit(1)
-
-        nrrd_path = detected_nrrd
-        csv_path = detected_csv
-
-        print(f"Found input files automatically.")
         try:
-            prompt = "What would you like to name the output video? [default: output.mp4]: "
+            nrrd_path = choose_file("nrrd", default_keyword="MRHead")
+            csv_path = choose_file("csv", default_keyword="professor_planes")
+
+            prompt = "\nWhat would you like to name the output video? [default: output.mp4]: "
             user_choice = input(prompt).strip()
             if user_choice:
                 mp4_path = user_choice if user_choice.endswith(".mp4") else user_choice + ".mp4"
             else:
                 mp4_path = "output.mp4"
+        except FileNotFoundError as fnf_err:
+            print(f"[Error] {fnf_err}")
+            print("Usage: python main.py <file.nrrd> <file.csv> <file.mp4>")
+            sys.exit(1)
         except (EOFError, KeyboardInterrupt):
             mp4_path = "output.mp4"
             print()
     else:
         print("Usage:")
         print("  python main.py <file.nrrd> <file.csv> <file.mp4>")
-        print("  python main.py  (runs with auto-detected files)")
+        print("  python main.py  (interactive file selection)")
         sys.exit(1)
 
     try:
