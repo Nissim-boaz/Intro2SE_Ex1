@@ -85,10 +85,16 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
 
         else:
             # -- Valid Plane: contrast enhancement, center padding, and corner label -
+            # Enhanced per-frame contrast auto-leveling
             f_max = float(frame.max())
             f_min = float(frame.min())
             if f_max > f_min:
                 normalized = np.clip((frame.astype(float) - f_min) / (f_max - f_min) * 255.0, 0, 255).astype(np.uint8)
+                # Apply subtle unsharp masking to enhance micro-contrast and tissue edges
+                if normalized.shape[0] > 10 and normalized.shape[1] > 10:
+                    blur = cv2.GaussianBlur(normalized, (0, 0), sigmaX=1.0)
+                    sharpened = cv2.addWeighted(normalized, 1.35, blur, -0.35, 0)
+                    normalized = np.clip(sharpened, 0, 255).astype(np.uint8)
             else:
                 normalized = np.zeros_like(frame, dtype=np.uint8)
 
