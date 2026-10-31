@@ -2,8 +2,8 @@
 video_writer.py
 Collects 2D projection frames and writes them to an MP4 video file.
 
-Voxel values are linearly scaled to 8-bit grayscale using the global
-[min, max] range of the volume, so brightness is consistent across frames.
+Frames are dynamically contrast-enhanced to 8-bit grayscale for maximum
+visual clarity, and centered within the video canvas.
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
     """
     Write a list of 2D frames to an MP4 video with on-screen annotations.
 
-    - Valid planes display a discreet title overlay: e.g. "Plane 1 (Row 2)".
-    - Invalid planes (represented by None in frames) display a prominent
-      notice indicating the row is invalid and skipped.
+    - Valid planes are centered within the canvas, contrast-enhanced, and display
+      a discreet corner label.
+    - Invalid planes display a centered explanatory slide.
 
     Parameters
     ----------
@@ -40,7 +40,7 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
     if not frames:
         raise ValueError("No frames to write.")
 
-    # Determine output frame size based on valid frames (fallback to 400x400 if none)
+    # Determine canvas dimensions based on largest frame
     valid_frames = [f for f in frames if f is not None]
     if valid_frames:
         max_rows = max(f.shape[0] for f in valid_frames)
@@ -54,41 +54,58 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
     if not writer.isOpened():
         raise RuntimeError(f"Cannot open video writer for path '{path}'.")
 
-    scale = 255.0 / max(vmax - vmin, 1)
     repeat_count = max(1, int(round(fps * seconds_per_frame)))
 
     for i, frame in enumerate(frames):
         label = labels[i] if labels and i < len(labels) else f"Plane {i + 1}"
 
         if frame is None:
-            # ── Invalid Plane: render explanatory slide ──────────────────
+            # -- Invalid Plane: render centered explanatory slide -----------
             padded = np.zeros((max_rows, max_cols), dtype=np.uint8)
 
-            # Draw warning box
-            cv2.rectangle(padded, (20, 20), (max_cols - 20, max_rows - 20), 200, 2)
+            inset = max(10, min(20, max_rows // 10, max_cols // 10))
+            cv2.rectangle(padded, (inset, inset), (max_cols - inset, max_rows - inset), 160, 1)
 
             font = cv2.FONT_HERSHEY_SIMPLEX
-            # Header line
-            cv2.putText(padded, label, (35, 70), font, 0.7, 255, 2, cv2.LINE_AA)
-            cv2.putText(padded, "STATUS: INVALID PLANE", (35, 115), font, 0.65, 255, 2, cv2.LINE_AA)
-            cv2.putText(padded, "No image displayed (skipped)", (35, 155), font, 0.55, 180, 1, cv2.LINE_AA)
+            lines = [
+                (label, 0.65, 255, 2),
+                ("STATUS: INVALID PLANE", 0.55, 220, 1),
+                ("No image displayed (skipped)", 0.45, 170, 1),
+            ]
+            line_spacing = 38
+            total_h = len(lines) * line_spacing
+            start_y = max(inset + 35, (max_rows - total_h) // 2 + 25)
+
+            for idx, (txt, f_scale, color, thk) in enumerate(lines):
+                (tw, th), _ = cv2.getTextSize(txt, font, f_scale, thk)
+                tx = max(inset + 10, (max_cols - tw) // 2)
+                ty = start_y + idx * line_spacing
+                if 0 < ty < max_rows - inset:
+                    cv2.putText(padded, txt, (tx, ty), font, f_scale, color, thk, cv2.LINE_AA)
 
         else:
-            # ── Valid Plane: normalize, pad, and add clean title overlay ─
-            normalized = np.clip((frame.astype(float) - vmin) * scale, 0, 255).astype(np.uint8)
+            # -- Valid Plane: contrast enhancement, center padding, and corner label -
+            f_max = float(frame.max())
+            f_min = float(frame.min())
+            if f_max > f_min:
+                normalized = np.clip((frame.astype(float) - f_min) / (f_max - f_min) * 255.0, 0, 255).astype(np.uint8)
+            else:
+                normalized = np.zeros_like(frame, dtype=np.uint8)
 
+            # Center the slice inside the video canvas
             padded = np.zeros((max_rows, max_cols), dtype=np.uint8)
             r, c = normalized.shape
-            padded[:r, :c] = normalized
+            r_off = (max_rows - r) // 2
+            c_off = (max_cols - c) // 2
+            padded[r_off : r_off + r, c_off : c_off + c] = normalized
 
-            # Small, discreet corner label tucked in the edge without obstructing the image
+            # Small, discreet corner label tucked in the corner
             text = label
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 0.38
             thickness = 1
             (tw, th), baseline = cv2.getTextSize(text, font, font_scale, thickness)
 
-            # Minimal dark background box tucked into the very corner
             cv2.rectangle(padded, (4, 4), (4 + tw + 8, 4 + th + 6), 0, -1)
             cv2.putText(padded, text, (8, 4 + th + 2), font, font_scale, 220, thickness, cv2.LINE_AA)
 
@@ -99,4 +116,3 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
     writer.release()
     total_written = len(frames) * repeat_count
     print(f"[VideoWriter] Wrote {len(frames)} plane entries ({total_written} video frames) -> '{path}' ({max_cols}x{max_rows} @ {fps} fps)")
-
