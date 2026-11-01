@@ -7,9 +7,10 @@ __pycache__/
 dist/
 build/
 
-# Output videos
+# Output videos (ignore generated videos except the required experiment output)
 *.mp4
 data/*.mp4
+!experiment_output.mp4
 
 # Environment
 .env
@@ -24,6 +25,5 @@ venv/
 .Trashes
 ehthumbs.db
 Thumbs.db
-
 
 .vscode/
