@@ -3,7 +3,8 @@ projector.py
 Computes the 2D projection of a 3D volume onto a given plane.
 
 The algorithm follows the pseudocode defined in docs/algorithm.md.
-The scanline inner loop is vectorized with NumPy for high performance and stability.
+The scanline inner loop is vectorized with NumPy for high performance and stability,
+using 1D coordinate vectors and contiguous flattened memory indexing.
 """
 
 from __future__ import annotations
@@ -43,6 +44,10 @@ def project(M: np.ndarray, plane: Plane) -> np.ndarray:
     a1 = plane.a1.copy().astype(float)
     a2 = plane.a2.copy().astype(float)
 
+    # 1D flattened view and stride multipliers for fast contiguous memory indexing
+    M_flat = M.reshape(-1)
+    sy_sz = sy * sz
+
     for y in range(rows):
         a1 += v_ab
         a2 += v_ac
@@ -57,35 +62,26 @@ def project(M: np.ndarray, plane: Plane) -> np.ndarray:
         dp = (a2 - a1) / d12
         n_steps = round(d12)
 
-        # --- vectorized scanline inner loop ---
-        t = np.arange(n_steps + 1, dtype=float)          # shape (n_steps+1,)
-        points = a1 + np.outer(t, dp)                    # shape (n_steps+1, 3)
-
-        ix = np.round(points[:, 0]).astype(int)
-        iy = np.round(points[:, 1]).astype(int)
-        iz = np.round(points[:, 2]).astype(int)
+        # Vectorized 1D coordinate arrays (avoids expensive 2D np.outer)
+        t = np.arange(n_steps + 1, dtype=float)
+        ix = np.round(a1[0] + t * dp[0]).astype(int)
+        iy = np.round(a1[1] + t * dp[1]).astype(int)
+        iz = np.round(a1[2] + t * dp[2]).astype(int)
 
         # x positions in E (centered), clipped to valid column range
         x_offset = round(cols / 2 - d12 / 2)
         x_indices = np.clip(x_offset + t.astype(int), 0, cols - 1)
 
-        # mask: only in-bounds voxels
+        # Mask: only in-bounds voxels
         in_bounds = (
             (ix >= 0) & (ix < sx) &
             (iy >= 0) & (iy < sy) &
             (iz >= 0) & (iz < sz)
         )
 
-        # clamp indices for safe indexing (masked out later)
-        ix_s = np.clip(ix, 0, sx - 1)
-        iy_s = np.clip(iy, 0, sy - 1)
-        iz_s = np.clip(iz, 0, sz - 1)
-
-        values = M[ix_s, iy_s, iz_s]
-        values[~in_bounds] = 0
-
-        # E[y, x]: y = row (Dab direction), x = col (Dbc direction)
-        E[y, x_indices] = values
+        # Contiguous 1D flat indexing (eliminates 3D index tuples, np.clip and double copy)
+        flat_idx = ix[in_bounds] * sy_sz + iy[in_bounds] * sz + iz[in_bounds]
+        E[y, x_indices[in_bounds]] = M_flat[flat_idx]
 
     return E
 
