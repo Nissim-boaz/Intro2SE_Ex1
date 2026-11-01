@@ -7,10 +7,9 @@ __pycache__/
 dist/
 build/
 
-# Output videos (ignore generated videos except the required experiment output)
+# Output videos
 *.mp4
 data/*.mp4
-!experiment_output.mp4
 
 # Environment
 .env
