@@ -10,10 +10,13 @@ Arguments:
     file.mp4    Output video file (one frame per valid plane, in CSV order)
 """
 
+from __future__ import annotations
+
 import sys
 import os
+import io
 import time
-import numpy as np
+import contextlib
 
 from src.volume_loader import load
 from src.csv_parser import parse_entries
@@ -23,62 +26,57 @@ from src.video_writer import write
 USAGE = "Usage: python Ex0.py file.nrrd file.csv file.mp4"
 
 
-def main(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
+@contextlib.contextmanager
+def silence_internal_logs():
+    """Suppresses noisy verbose stdout prints from internal modules."""
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        yield
+    finally:
+        sys.stdout = old_stdout
 
-    # -- 1. Load volume ----------------------------------------------
-    M = load(nrrd_path)
+
+def main(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
+    print(f"\nUsing volume: {nrrd_path}")
+    print(f"Using planes: {csv_path}")
+
+    # Load volume and parse planes quietly
+    with silence_internal_logs():
+        M = load(nrrd_path)
+        entries = parse_entries(csv_path)
+
+    if not entries:
+        print(f"[Error] No valid plane definitions found in: {csv_path}")
+        sys.exit(1)
 
     vmin = int(M.min())
     vmax = int(M.max())
 
-    # -- 2. Parse planes ---------------------------------------------
-    entries = parse_entries(csv_path)
-
-    if not entries:
-        print("[Error] No plane entries found in CSV. Exiting.")
-        sys.exit(1)
-
-    valid_count = sum(1 for e in entries if e["status"] == "valid")
-    print(f"[Main] {len(entries)} plane row(s) read ({valid_count} valid).")
-
-    # -- 3. Warn if output file already exists -----------------------
-    if os.path.exists(mp4_path):
-        print(f"[Warning] Output file '{mp4_path}' already exists and will be overwritten.")
-
-    # -- 4. Project each plane ----------------------------------------
     frames = []
     labels = []
+    valid_count = sum(1 for e in entries if e["status"] == "valid")
+
     t_start = time.perf_counter()
-
     for entry in entries:
-        p_idx = entry["plane_idx"]
-        r_num = entry["row_num"]
-
         if entry["status"] == "valid":
             frame = project(M, entry["plane"])
             frames.append(frame)
-            labels.append(f"Plane {p_idx} (Row {r_num})")
+            labels.append(f"Plane {entry['plane_idx']}")
         else:
             frames.append(None)
-            labels.append(f"Plane {p_idx} (Row {r_num})")
+            labels.append(f"Plane {entry['plane_idx']}")
 
     t_proj = time.perf_counter() - t_start
     fps = valid_count / t_proj if t_proj > 0 else float("inf")
 
-    # -- 5. Write video -----------------------------------------------
-    write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels)
+    # Write video quietly
+    with silence_internal_logs():
+        write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels)
 
-    # -- 6. Summary ---------------------------------------------------
-    print(
-        f"\n-- Summary ------------------------------\n"
-        f"  Total planes:   {len(entries)}\n"
-        f"  Valid planes:   {valid_count}\n"
-        f"  Invalid planes: {len(entries) - valid_count}\n"
-        f"  Projection time:{t_proj:.3f} s\n"
-        f"  Processing FPS: {fps:.1f}\n"
-        f"  {'[PASS]' if fps >= 30 else '[FAIL]'} (target: >=30 FPS)\n"
-        f"-----------------------------------------"
-    )
+    # Concise final report
+    print(f"Speed: {fps:.1f} FPS")
+    print(f"Video created successfully: {mp4_path}\n")
 
 
 if __name__ == "__main__":
@@ -86,4 +84,8 @@ if __name__ == "__main__":
         print(USAGE)
         sys.exit(1)
 
-    main(sys.argv[1], sys.argv[2], sys.argv[3])
+    try:
+        main(sys.argv[1], sys.argv[2], sys.argv[3])
+    except Exception as e:
+        print(f"[Error] Execution failed: {e}")
+        sys.exit(1)
