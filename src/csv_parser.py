@@ -64,10 +64,21 @@ def parse_entries(path: str) -> list[dict]:
             plane_counter += 1
             n = len(raw_floats)
 
-            # Case A: 10 or 13 values (with count)
+            # Case A: 10 or 13 values (with count at index 0)
             if n in (10, 13) and int(raw_floats[0]) in (3, 4):
                 expected_points = int(raw_floats[0])
-                coords = raw_floats[1:1 + expected_points * 3]
+                coords = raw_floats[1:]
+                if len(coords) < expected_points * 3:
+                    err = f"declared {expected_points} points ({expected_points * 3} coordinates), but only {len(coords)} values provided"
+                    print(f"[CSVParser] Row {row_num} (Plane {plane_counter}): skipped ({err})")
+                    entries.append({
+                        "plane_idx": plane_counter,
+                        "row_num": row_num,
+                        "status": "invalid",
+                        "error": err
+                    })
+                    continue
+                coords = coords[:expected_points * 3]
                 pts = [np.array(coords[i*3:(i+1)*3]) for i in range(expected_points)]
             elif n == 9:
                 pts = [np.array(raw_floats[i*3:(i+1)*3]) for i in range(3)]
@@ -111,5 +122,3 @@ def parse(path: str) -> list[Plane]:
     """
     entries = parse_entries(path)
     return [e["plane"] for e in entries if e["status"] == "valid"]
-
-
