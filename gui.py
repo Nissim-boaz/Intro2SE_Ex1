@@ -184,9 +184,9 @@ class ProjectionApp:
             fps = valid_count / t_proj if t_proj > 0 else float("inf")
             self._update_progress(85)
 
-            # Step 4: Write video
+            # Step 4: Write video (smooth playback at 30 FPS)
             self._update_status("Writing MP4 video with annotations...")
-            write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels, errors=errors)
+            write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, labels=labels, errors=errors)
             self._update_progress(100)
 
             # Done!

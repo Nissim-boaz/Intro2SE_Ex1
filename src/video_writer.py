@@ -42,7 +42,7 @@ def classify_error(err: str | None) -> str:
 
 
 def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
-          vmin: int = 0, vmax: int = 255, seconds_per_frame: float = 3.0,
+          vmin: int = 0, vmax: int = 255, seconds_per_frame: float | None = None,
           labels: list[str] | None = None,
           errors: list[str | None] | None = None) -> None:
     """
@@ -51,6 +51,8 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
     - Valid planes are centered within the canvas, contrast-enhanced, and display
       a discreet corner label.
     - Invalid planes display a centered explanatory slide with error classification.
+    - Playback speed defaults to smooth 30 FPS (1 frame per plane), while error
+      slides are paused for readability (~1.5s).
 
     Parameters
     ----------
@@ -62,8 +64,9 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
         Video frame rate (default 30).
     vmin, vmax : int
         Value range for linear 8-bit normalization.
-    seconds_per_frame : float
-        Duration in seconds to display each frame (default 3.0).
+    seconds_per_frame : float, optional
+        Duration in seconds to display each frame. If None, defaults to 1 frame
+        per slice (smooth playback at the specified fps).
     labels : list of str, optional
         Descriptive label for each entry in frames.
     errors : list of (str or None), optional
@@ -86,7 +89,12 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
     if not writer.isOpened():
         raise RuntimeError(f"Cannot open video writer for path '{path}'.")
 
-    repeat_count = max(1, int(round(fps * seconds_per_frame)))
+    if seconds_per_frame is None:
+        repeat_count = 1
+    else:
+        repeat_count = max(1, int(round(fps * seconds_per_frame)))
+
+    total_written = 0
 
     for i, frame in enumerate(frames):
         label = labels[i] if labels and i < len(labels) else f"Plane {i + 1}"
@@ -118,6 +126,9 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
                 ty = start_y + idx * line_spacing
                 if 0 < ty < max_rows - inset:
                     cv2.putText(padded, txt, (tx, ty), font, f_scale, color, thk, cv2.LINE_AA)
+
+            # Hold error slide for ~1.5s so humans can read it if video is running at high fps
+            actual_repeat = max(repeat_count, int(round(fps * 1.5))) if repeat_count < fps else repeat_count
 
         else:
             # -- Valid Plane: contrast enhancement, center padding, and corner label -
@@ -151,10 +162,12 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
             cv2.rectangle(padded, (4, 4), (4 + tw + 8, 4 + th + 6), 0, -1)
             cv2.putText(padded, text, (8, 4 + th + 2), font, font_scale, 220, thickness, cv2.LINE_AA)
 
-        # Write frame repeated for seconds_per_frame
-        for _ in range(repeat_count):
+            actual_repeat = repeat_count
+
+        # Write frame
+        for _ in range(actual_repeat):
             writer.write(padded)
+        total_written += actual_repeat
 
     writer.release()
-    total_written = len(frames) * repeat_count
     print(f"[VideoWriter] Wrote {len(frames)} plane entries ({total_written} video frames) -> '{path}' ({max_cols}x{max_rows} @ {fps} fps)")

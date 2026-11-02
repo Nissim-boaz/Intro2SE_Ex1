@@ -73,9 +73,9 @@ def main(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
     t_proj = time.perf_counter() - t_start
     fps = valid_count / t_proj if t_proj > 0 else float("inf")
 
-    # Write video quietly
+    # Write video quietly (smooth playback at 30 FPS)
     with silence_internal_logs():
-        write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels, errors=errors)
+        write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, labels=labels, errors=errors)
 
     # Concise final report
     print(f"Speed: {fps:.1f} FPS")
