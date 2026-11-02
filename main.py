@@ -70,7 +70,7 @@ def choose_file(extension: str, default_keyword: str = "") -> str:
         for c in candidates:
             if choice in c:
                 return c
-        return candidates[0]
+            return candidates[0]
     except (EOFError, KeyboardInterrupt):
         return candidates[0]
 
@@ -94,6 +94,7 @@ def run_projection(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
 
     frames = []
     labels = []
+    errors = []
     valid_count = sum(1 for e in entries if e["status"] == "valid")
 
     t_start = time.perf_counter()
@@ -102,16 +103,18 @@ def run_projection(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
             frame = project(M, entry["plane"])
             frames.append(frame)
             labels.append(f"Plane {entry['plane_idx']}")
+            errors.append(None)
         else:
             frames.append(None)
             labels.append(f"Plane {entry['plane_idx']}")
+            errors.append(entry.get("error"))
 
     t_proj = time.perf_counter() - t_start
     fps = valid_count / t_proj if t_proj > 0 else float("inf")
 
     # Write video quietly
     with silence_internal_logs():
-        write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels)
+        write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels, errors=errors)
 
     # Concise final report
     print(f"Speed: {fps:.1f} FPS")

@@ -4,6 +4,7 @@ Collects 2D projection frames and writes them to an MP4 video file.
 
 Frames are dynamically contrast-enhanced to 8-bit grayscale for maximum
 visual clarity, and centered within the video canvas.
+Invalid planes display a formatted slide with specific error classification.
 """
 
 from __future__ import annotations
@@ -12,15 +13,44 @@ import cv2
 import numpy as np
 
 
+def classify_error(err: str | None) -> str:
+    """Classifies raw error messages into concise, human-readable categories."""
+    if not err:
+        return "Invalid Plane Geometry"
+    err_lower = err.lower()
+    if "inf" in err_lower or "nan" in err_lower:
+        return "Invalid Values (NaN / Inf)"
+    if "collinear" in err_lower:
+        return "Collinear Points (Degenerate)"
+    if "zero length" in err_lower or "zero-length" in err_lower or "zero_side" in err_lower:
+        return "Zero-Length Side (Degenerate)"
+    if "not coplanar" in err_lower or "coplanar" in err_lower:
+        return "Points Not Coplanar"
+    if "triangle" in err_lower and "isosceles" in err_lower:
+        return "Triangle Not Isosceles"
+    if "trapezoid constraint" in err_lower or "wider" in err_lower or "dist(a1,a2)" in err_lower:
+        return "Top Base Wider Than Bottom"
+    if "trapezoid" in err_lower or "not isosceles" in err_lower:
+        return "Trapezoid Not Isosceles"
+    if "declared" in err_lower and "provided" in err_lower:
+        return "Point Count Mismatch"
+    if "expected" in err_lower and ("numbers" in err_lower or "values" in err_lower or "got" in err_lower):
+        return "Invalid Coordinate Count"
+    if "non-numeric" in err_lower or "numeric" in err_lower:
+        return "Non-Numeric Values"
+    return "Invalid Plane Geometry"
+
+
 def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
           vmin: int = 0, vmax: int = 255, seconds_per_frame: float = 3.0,
-          labels: list[str] | None = None) -> None:
+          labels: list[str] | None = None,
+          errors: list[str | None] | None = None) -> None:
     """
     Write a list of 2D frames to an MP4 video with on-screen annotations.
 
     - Valid planes are centered within the canvas, contrast-enhanced, and display
       a discreet corner label.
-    - Invalid planes display a centered explanatory slide.
+    - Invalid planes display a centered explanatory slide with error classification.
 
     Parameters
     ----------
@@ -36,6 +66,8 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
         Duration in seconds to display each frame (default 3.0).
     labels : list of str, optional
         Descriptive label for each entry in frames.
+    errors : list of (str or None), optional
+        Error messages for invalid planes, classified and displayed on error slides.
     """
     if not frames:
         raise ValueError("No frames to write.")
@@ -66,15 +98,19 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
             inset = max(10, min(20, max_rows // 10, max_cols // 10))
             cv2.rectangle(padded, (inset, inset), (max_cols - inset, max_rows - inset), 160, 1)
 
+            err_msg = errors[i] if errors and i < len(errors) else None
+            sub_category = classify_error(err_msg)
+
             font = cv2.FONT_HERSHEY_SIMPLEX
             lines = [
                 (label, 0.65, 255, 2),
-                ("STATUS: INVALID PLANE", 0.55, 220, 1),
-                ("No image displayed (skipped)", 0.45, 170, 1),
+                ("ERROR: INVALID PLANE", 0.60, 220, 2),
+                (sub_category, 0.50, 190, 1),
+                ("No image displayed (skipped)", 0.42, 140, 1),
             ]
-            line_spacing = 38
+            line_spacing = max(24, min(38, (max_rows - inset * 2) // (len(lines) + 2)))
             total_h = len(lines) * line_spacing
-            start_y = max(inset + 35, (max_rows - total_h) // 2 + 25)
+            start_y = max(inset + 25, (max_rows - total_h) // 2 + 20)
 
             for idx, (txt, f_scale, color, thk) in enumerate(lines):
                 (tw, th), _ = cv2.getTextSize(txt, font, f_scale, thk)

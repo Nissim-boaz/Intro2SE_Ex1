@@ -1,6 +1,6 @@
 """
 test_video_writer.py
-Unit tests for src/video_writer.py  (VW-1 … VW-4)
+Unit tests for src/video_writer.py  (VW-1 … VW-5)
 """
 
 import os
@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import cv2
 
-from src.video_writer import write
+from src.video_writer import write, classify_error
 
 
 class TestVideoWriter:
@@ -61,3 +61,16 @@ class TestVideoWriter:
         with pytest.raises(ValueError, match="[Nn]o frames"):
             write([], str(tmp_path / "out.mp4"))
 
+    def test_VW5_invalid_frame_with_error_classification(self, tmp_path):
+        """VW-5: invalid frames with errors are classified and written to video."""
+        assert classify_error("Not an isosceles triangle") == "Triangle Not Isosceles"
+        assert classify_error("Not isosceles") == "Trapezoid Not Isosceles"
+        assert classify_error("Trapezoid points are not coplanar") == "Points Not Coplanar"
+        assert classify_error("points are collinear") == "Collinear Points (Degenerate)"
+        assert classify_error("dist(a1,a2)=100 > dist(b,c)=50") == "Top Base Wider Than Bottom"
+        assert classify_error("zero length") == "Zero-Length Side (Degenerate)"
+
+        frames = [None, np.zeros((20, 20), dtype=np.uint8)]
+        out = str(tmp_path / "out_err.mp4")
+        write(frames, out, fps=10, seconds_per_frame=0.2, errors=["Not an isosceles triangle", None])
+        assert os.path.exists(out)

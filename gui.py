@@ -159,6 +159,7 @@ class ProjectionApp:
             valid_count = sum(1 for e in entries if e["status"] == "valid")
             frames = []
             labels = []
+            errors = []
             t_start = time.perf_counter()
 
             for i, entry in enumerate(entries):
@@ -169,9 +170,11 @@ class ProjectionApp:
                     frame = project(M, entry["plane"])
                     frames.append(frame)
                     labels.append(f"Plane {p_idx} (Row {r_num})")
+                    errors.append(None)
                 else:
                     frames.append(None)
                     labels.append(f"Plane {p_idx} (Row {r_num})")
+                    errors.append(entry.get("error"))
 
                 pct = 20 + int(60 * (i + 1) / total)
                 self._update_progress(pct)
@@ -183,7 +186,7 @@ class ProjectionApp:
 
             # Step 4: Write video
             self._update_status("Writing MP4 video with annotations...")
-            write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels)
+            write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, seconds_per_frame=3.0, labels=labels, errors=errors)
             self._update_progress(100)
 
             # Done!
@@ -226,4 +229,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = ProjectionApp(root)
     root.mainloop()
-
