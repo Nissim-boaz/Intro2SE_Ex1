@@ -23,8 +23,8 @@ Points outside the volume boundaries sample a value of $0$.
 - **Input:** 3D volume in NRRD format, and a CSV file specifying slicing planes (each row defining 3 or 4 points).
 - **Processing:** Efficient vectorized sampling of voxel values along the plane in index space.
 - **Output:** An MP4 video file compiling all computed 2D projection frames in CSV row order.
-- **Performance:** Optimized runtime achieving over 30 FPS (mandatory) on a $500^3$ volume.
-- **Robustness:** Automatic detection and skipping of invalid or non-isosceles planes with informative notices.
+- **Performance:** Optimized runtime achieving over 103 FPS on the MRHead volume (256×256×130), and over 231 FPS on the demo dataset.
+- **Robustness:** Automatic detection and skipping of invalid planes with informative error slides in the output video. Consecutive identical errors are grouped into a single slide (e.g., `Planes: 1–25`) to keep the video concise.
 
 ---
 
@@ -39,6 +39,18 @@ python Ex0.py file.nrrd file.csv file.mp4
 ```bash
 python gui.py
 ```
+
+---
+
+## Demo
+
+To generate the 15-second showcase demo on the MRHead volume:
+
+```bash
+python Ex0.py data/MRHead_1.nrrd data/head_demo.csv demo.mp4
+```
+
+The `head_demo.csv` file contains 315 valid planes across three sweeps (axial, oblique, coronal) and 3 deliberately introduced errors, demonstrating the full pipeline including error detection and grouped error slides.
 
 ---
 

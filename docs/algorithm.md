@@ -1,8 +1,8 @@
 # Projection Algorithm – Detailed Design
 
-**Project:** Plane Projection of a 3D Volume
-**Authors:** Nissim, Bnaya Amitay
-**Version:** 0.1
+**Project:** Plane Projection of a 3D Volume  
+**Authors:** Nissim Boaz, Bnaya Amitay  
+**Version:** 1.0  
 
 ---
 
@@ -181,10 +181,10 @@ On a 500³ byte volume.
 
 | Strategy | Description |
 |----------|-------------|
-| **Contiguous array** | Volume stored as a single `numpy.ndarray` (C-contiguous), enabling fast indexing |
-| **Vectorized inner loop** | Replace the Python `for x1` loop with NumPy vector operations: precompute all `p` positions, round, clip, and index `M` in one batch |
-| **Avoid object allocation** | No per-sample Python object creation; use pre-allocated arrays |
-| **Integer arithmetic** | After rounding, use integer indexing (no repeated float-to-int conversion) |
+| **Contiguous flat array** | Volume stored as a single C-contiguous `numpy.ndarray`; rows, columns, and slices map to a single 1D memory buffer for cache-friendly access |
+| **Flat-index batch lookup** | Sample positions are converted to a single flat integer index `idx = ix*sy*sz + iy*sz + iz` and looked up in one vectorized call: `M.ravel()[idx]` |
+| **Fully vectorized inner loop** | The Python `for x1` loop is eliminated entirely: all sample positions for a row are precomputed with `np.arange` + broadcasting, rounded, clipped, and indexed in one NumPy operation |
+| **Avoid object allocation** | No per-sample Python object creation; output `E` is pre-allocated once per plane |
 
 ### 5.3 Vectorized Projection (Key Optimization)
 
@@ -193,22 +193,25 @@ Instead of looping sample-by-sample, each row is computed as:
 ```python
 # For each row y:
 t = np.arange(0, round(d12) + 1)          # [0, 1, ..., d12]
-points = a1 + np.outer(t, dp)             # all sample positions
+points = a1 + np.outer(t, dp)             # all sample positions, shape (n, 3)
 ix = np.clip(np.round(points[:, 0]).astype(int), 0, sx-1)
 iy = np.clip(np.round(points[:, 1]).astype(int), 0, sy-1)
 iz = np.clip(np.round(points[:, 2]).astype(int), 0, sz-1)
-values = M[ix, iy, iz]                    # batch lookup
+flat_idx = ix * sy * sz + iy * sz + iz    # flat index into M.ravel()
+values = M.ravel()[flat_idx]              # single batch lookup
 # write values into E at the correct x offsets
 ```
 
-This eliminates the innermost Python loop entirely.
+This eliminates the innermost Python loop entirely and accesses memory in one contiguous batch.
 
-### 5.4 Full Vectorization (Advanced)
+### 5.4 Measured Performance
 
-For maximum FPS, both loops (`y` and `x1`) can be eliminated:
-1. Precompute all `(a1, a2)` pairs for every row using `np.arange` and broadcasting.
-2. For each row, generate all sample points.
-3. Flatten into a single batch index operation on `M`.
+| Dataset | Volume Size | Measured FPS |
+|---------|------------|-------------|
+| MRHead  | 256×256×130 | **103+ FPS** |
+| head_demo (315 planes) | 256×256×130 | **231+ FPS** |
+
+Both results exceed the 100 FPS target.
 
 ---
 
@@ -243,12 +246,45 @@ coplanar = abs(|dot(n1_norm, n2_norm)| - 1) < EPS
 
 ---
 
-## 7. Data Flow
+## 7. Error Detection & Video Output
+
+### 7.1 Error Categories
+
+The CSV parser and plane validator detect **11 error categories**:
+
+| Category | Trigger |
+|----------|---------|
+| `Triangle Not Isosceles` | `abs(dist(a,b) - dist(a,c)) >= EPS` |
+| `Trapezoid Not Isosceles` | `abs(dist(a1,b) - dist(a2,c)) >= EPS` |
+| `Top Wider Than Bottom` | `dist(a1,a2) > dist(b,c)` |
+| `Points Not Coplanar` | Coplanarity check fails |
+| `Degenerate Triangle` | Collinear points or zero-length sides |
+| `Degenerate Trapezoid` | Collinear points or zero-length legs |
+| `Point Count Mismatch` | Declared N points but fewer coordinates provided |
+| `Wrong Number of Values` | Row has neither 9 nor 12 numeric fields |
+| `Non-Numeric Values` | Fields cannot be parsed as floats |
+| `Empty Row` | Row contains no data |
+| `Unknown` | Catch-all for unexpected failures |
+
+### 7.2 Consecutive Error Grouping
+
+When the same error occurs on a contiguous range of CSV rows, the video writer collapses them into **a single error slide** (1.5 s duration) instead of one slide per row:
 
 ```
-NRRD file ──→ [Volume Loader] ──→ M (3D array)
+Planes: 1-25
+Triangle Not Isosceles
+```
+
+This keeps the output video concise when systematic input errors span many consecutive rows.
+
+---
+
+## 8. Data Flow
+
+```
+NRRD file ──→ [Volume Loader] ──→ M (3D array, C-contiguous)
                                        │
-CSV file  ──→ [CSV Parser] ──→ list of planes
+CSV file  ──→ [CSV Parser] ──→ list of (Plane | Error)
                                        │
                               ┌────────┘
                               ▼
@@ -261,17 +297,20 @@ CSV file  ──→ [CSV Parser] ──→ list of planes
                               │
                               ▼
                     [Video Writer] ──→ MP4 file
+                     (groups consecutive identical errors
+                      into single annotated slides)
 ```
 
 ---
 
-## 8. Module Responsibilities
+## 9. Module Responsibilities
 
 | Module | Responsibility |
 |--------|---------------|
-| `volume_loader.py` | Read NRRD, validate dimensions and dtype, return `ndarray` |
+| `volume_loader.py` | Read NRRD, validate dimensions and dtype, return C-contiguous `ndarray` |
 | `plane.py` | Represent and validate a plane (3 or 4 points) |
-| `projector.py` | Implement the projection algorithm, return 2D `ndarray` |
-| `video_writer.py` | Collect frames, normalize to 8-bit, write MP4 |
-| `csv_parser.py` | Parse CSV rows into `Plane` objects |
+| `projector.py` | Implement the vectorized flat-index projection algorithm, return 2D `ndarray` |
+| `video_writer.py` | Collect frames and error info, normalize to 8-bit, group consecutive errors, write MP4 |
+| `csv_parser.py` | Parse CSV rows into `Plane` objects; detect and classify 11 error categories |
 | `Ex0.py` | CLI entry point, orchestrate the pipeline |
+| `gui.py` | Optional desktop GUI wrapping the same pipeline |
