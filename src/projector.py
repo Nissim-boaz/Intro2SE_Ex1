@@ -1,10 +1,7 @@
 """
 projector.py
-Computes the 2D projection of a 3D volume onto a given plane.
-
-The algorithm follows the pseudocode defined in docs/algorithm.md.
-The scanline inner loop is vectorized with NumPy for high performance and stability,
-using 1D coordinate vectors and contiguous flattened memory indexing.
+Computes the 2D projection of a 3D volumetric array onto a geometric plane.
+Implements vectorized scanline sampling with nearest-neighbor voxel interpolation.
 """
 
 from __future__ import annotations
@@ -15,20 +12,31 @@ from src.plane import Plane
 
 def project(M: np.ndarray, plane: Plane) -> np.ndarray:
     """
-    Project the 3D volume M onto the given plane and return a 2D image.
+    Project the 3D volume M onto the given plane and return a 2D density image.
+    Follows vectorized scanline traversal along the plane legs and width segments.
+
+    Algorithm:
+        1. Allocate output 2D image E of shape (round(Dab), round(Dbc)).
+        2. Compute unit step vectors v_ab and v_ac along the two plane legs.
+        3. For each scanline row y in 0 .. rows-1:
+               Advance edge walkers: a1 += v_ab, a2 += v_ac.
+               Interpolate 3D points along segment [a1, a2] in 1.0 unit steps.
+               Round coordinates (nearest-neighbor) to integer indices (ix, iy, iz).
+               Filter in-bounds voxels and sample densities from M into centered E[y].
+        4. Return 2D projection array E.
 
     Parameters
     ----------
     M : np.ndarray
-        3D volume of shape (sx, sy, sz), integer dtype.
+        3D volume array of shape (sx, sy, sz) with integer densities.
     plane : Plane
-        A validated Plane object (triangle or trapezoid).
+        A validated Plane object (isosceles triangle or trapezoid).
 
     Returns
     -------
     np.ndarray
         2D array of shape (rows, cols) = (round(Dab), round(Dbc)),
-        same dtype as M. Out-of-bounds samples are 0.
+        with the same data type as M. Out-of-bounds samples evaluate to 0.
     """
     sx, sy, sz = M.shape
 
@@ -55,39 +63,43 @@ def project(M: np.ndarray, plane: Plane) -> np.ndarray:
         d12 = float(np.linalg.norm(a2 - a1))
 
         if d12 < 1e-9:
-            # Apex row: single sample at center
+            # Apex row (triangle top): single sample at center
             _write_sample(M, E, a1, y, cols // 2, sx, sy, sz)
             continue
 
         dp = (a2 - a1) / d12
         n_steps = round(d12)
 
-        # Vectorized 1D coordinate arrays (avoids expensive 2D np.outer)
+        # Vectorized 1D coordinate arrays along the current scanline segment
         t = np.arange(n_steps + 1, dtype=float)
         ix = np.round(a1[0] + t * dp[0]).astype(int)
         iy = np.round(a1[1] + t * dp[1]).astype(int)
         iz = np.round(a1[2] + t * dp[2]).astype(int)
 
-        # x positions in E (centered), clipped to valid column range
+        # Centered horizontal x-coordinates in output canvas E
         x_offset = round(cols / 2 - d12 / 2)
         x_indices = np.clip(x_offset + t.astype(int), 0, cols - 1)
 
-        # Mask: only in-bounds voxels
+        # In-bounds boundary check for volume dimensions
         in_bounds = (
             (ix >= 0) & (ix < sx) &
             (iy >= 0) & (iy < sy) &
             (iz >= 0) & (iz < sz)
         )
 
-        # Contiguous 1D flat indexing (eliminates 3D index tuples, np.clip and double copy)
+        # Contiguous 1D flat memory indexing for maximum cache locality
         flat_idx = ix[in_bounds] * sy_sz + iy[in_bounds] * sz + iz[in_bounds]
         E[y, x_indices[in_bounds]] = M_flat[flat_idx]
 
     return E
 
 
-def _write_sample(M, E, p, y, x, sx, sy, sz):
-    """Write a single voxel sample into E at position (y, x)."""
+def _write_sample(M: np.ndarray, E: np.ndarray, p: np.ndarray,
+                  y: int, x: int, sx: int, sy: int, sz: int) -> None:
+    """
+    Sample a single voxel at coordinate p and store it in E[y, x] if inside bounds.
+    Used for the single apex point at the top of triangle planes.
+    """
     ix, iy, iz = round(p[0]), round(p[1]), round(p[2])
     if 0 <= ix < sx and 0 <= iy < sy and 0 <= iz < sz:
         E[y, x] = M[ix, iy, iz]

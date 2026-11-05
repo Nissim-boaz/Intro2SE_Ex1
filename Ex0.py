@@ -13,7 +13,6 @@ Arguments:
 from __future__ import annotations
 
 import sys
-import os
 import io
 import time
 import contextlib
@@ -28,7 +27,10 @@ USAGE = "Usage: python Ex0.py file.nrrd file.csv file.mp4"
 
 @contextlib.contextmanager
 def silence_internal_logs():
-    """Suppresses noisy verbose stdout prints from internal modules."""
+    """
+    Temporarily suppress noisy stdout logging from internal modules.
+    Keeps the terminal output clean and focused on essential progress metrics.
+    """
     old_stdout = sys.stdout
     sys.stdout = io.StringIO()
     try:
@@ -38,10 +40,31 @@ def silence_internal_logs():
 
 
 def main(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
+    """
+    Execute the full 3D plane projection pipeline from command-line inputs.
+
+    Algorithm:
+        1. Load volumetric NRRD data and parse plane definitions from CSV.
+        2. Iterate through parsed plane entries:
+               Valid plane   -> compute 2D projection via project(M, plane).
+               Invalid plane -> record None frame and capture error description.
+        3. Compute projection throughput (FPS) on valid slices.
+        4. Render and write output MP4 video via write().
+        5. Print final execution metrics and video destination.
+
+    Parameters
+    ----------
+    nrrd_path : str
+        Path to the 3D .nrrd volumetric dataset.
+    csv_path : str
+        Path to the CSV file defining plane geometries.
+    mp4_path : str
+        Path where the rendered .mp4 video will be saved.
+    """
     print(f"\nUsing volume: {nrrd_path}")
     print(f"Using planes: {csv_path}")
 
-    # Load volume and parse planes quietly
+    # Step 1: Load volume and parse planes quietly
     with silence_internal_logs():
         M = load(nrrd_path)
         entries = parse_entries(csv_path)
@@ -58,6 +81,7 @@ def main(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
     errors = []
     valid_count = sum(1 for e in entries if e["status"] == "valid")
 
+    # Step 2: Project each plane and record processing metrics
     t_start = time.perf_counter()
     for entry in entries:
         if entry["status"] == "valid":
@@ -73,11 +97,11 @@ def main(nrrd_path: str, csv_path: str, mp4_path: str) -> None:
     t_proj = time.perf_counter() - t_start
     fps = valid_count / t_proj if t_proj > 0 else float("inf")
 
-    # Write video quietly (smooth playback at 30 FPS)
+    # Step 3: Write video quietly (smooth playback at 30 FPS)
     with silence_internal_logs():
         write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, labels=labels, errors=errors)
 
-    # Concise final report
+    # Step 4: Concise final report
     print(f"Speed: {fps:.1f} FPS")
     print(f"Video created successfully: {mp4_path}\n")
 

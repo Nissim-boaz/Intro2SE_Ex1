@@ -1,10 +1,8 @@
 """
 video_writer.py
 Collects 2D projection frames and writes them to an MP4 video file.
-
-Frames are dynamically contrast-enhanced to 8-bit grayscale for maximum
-visual clarity, and centered within the video canvas.
-Invalid planes display a formatted slide with specific error classification.
+Enhances contrast to 8-bit grayscale, centers frames, and renders error slides.
+Groups consecutive identical errors into unified explanatory notices.
 """
 
 from __future__ import annotations
@@ -15,7 +13,20 @@ import numpy as np
 
 
 def classify_error(err: str | None) -> str:
-    """Classifies raw error messages into concise, human-readable categories."""
+    """
+    Classify a raw error message into a concise, standardized category.
+    Used for display on on-screen video error slides.
+
+    Parameters
+    ----------
+    err : str or None
+        Raw error message from the parser or plane validation.
+
+    Returns
+    -------
+    str
+        Human-readable category (e.g. 'Triangle Not Isosceles', 'Point Count Mismatch').
+    """
     if not err:
         return "Invalid Plane Geometry"
     err_lower = err.lower()
@@ -44,11 +55,22 @@ def classify_error(err: str | None) -> str:
 
 def format_group_label(start_idx: int, end_idx: int, labels: list[str] | None) -> str:
     """
-    Format a label for a single plane or a grouped range of consecutive planes.
+    Format an on-screen title for a single plane or a grouped range of consecutive planes.
+    Extracts numerical indices and row references from label strings.
 
-    Examples:
-        Single:  "Plane 1" or "Plane 1 (Row 2)"
-        Grouped: "Planes: 1-25" or "Planes: 1-25 (Rows 2-26)"
+    Parameters
+    ----------
+    start_idx : int
+        Starting index of the plane sequence.
+    end_idx : int
+        Ending index of the plane sequence (inclusive).
+    labels : list of str, optional
+        Pre-formatted per-plane labels.
+
+    Returns
+    -------
+    str
+        Formatted string (e.g. 'Plane 1', 'Planes: 1-25', or 'Planes: 1-25 (Rows 2-26)').
     """
     if start_idx == end_idx:
         return labels[start_idx] if labels and start_idx < len(labels) else f"Plane {start_idx + 1}"
@@ -75,7 +97,26 @@ def format_group_label(start_idx: int, end_idx: int, labels: list[str] | None) -
 
 def render_error_slide(max_rows: int, max_cols: int, label: str,
                        sub_category: str, is_group: bool = False) -> np.ndarray:
-    """Render a clean error slide centered on the canvas."""
+    """
+    Render a centered explanatory error notice on a black video canvas.
+    Automatically scales font sizes to ensure text never overflows canvas bounds.
+
+    Parameters
+    ----------
+    max_rows, max_cols : int
+        Dimensions of the video frame canvas.
+    label : str
+        Top header identifying the plane index or aggregated range.
+    sub_category : str
+        Classified error category explaining why the plane is invalid.
+    is_group : bool
+        True if the slide represents multiple consecutive planes.
+
+    Returns
+    -------
+    np.ndarray
+        8-bit grayscale image of shape (max_rows, max_cols).
+    """
     padded = np.zeros((max_rows, max_cols), dtype=np.uint8)
 
     inset = max(10, min(20, max_rows // 10, max_cols // 10))
@@ -96,7 +137,7 @@ def render_error_slide(max_rows: int, max_cols: int, label: str,
     start_y = max(inset + 25, (max_rows - total_h) // 2 + 20)
 
     for idx, (txt, f_scale, color, thk) in enumerate(lines):
-        # Auto-scale font if text width exceeds canvas
+        # Auto-scale font if text width exceeds canvas boundary
         (tw, th), _ = cv2.getTextSize(txt, font, f_scale, thk)
         max_avail_w = max_cols - (inset + 15) * 2
         if tw > max_avail_w and tw > 0:
@@ -116,31 +157,38 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
           labels: list[str] | None = None,
           errors: list[str | None] | None = None) -> None:
     """
-    Write a list of 2D frames to an MP4 video with on-screen annotations.
+    Write a list of 2D projection frames and error slides to an MP4 video file.
+    Applies auto-contrast enhancement to valid slices and groups consecutive errors.
 
-    - Valid planes are centered within the canvas, contrast-enhanced, and display
-      a discreet corner label.
-    - Invalid planes display a centered explanatory slide with error classification.
-    - Playback speed defaults to smooth 30 FPS (1 frame per plane), while error
-      slides are paused for readability (~1.5s).
+    Algorithm:
+        1. Determine maximum canvas dimensions from valid frames (fallback 400x400).
+        2. Initialize cv2.VideoWriter with mp4v codec.
+        3. Loop over frame entries:
+               If frame is valid:
+                   Normalize contrast to 8-bit, center in canvas, overlay corner label.
+                   Write frame to video (1 repeat for 30 FPS playback).
+               If frame is invalid:
+                   Group consecutive invalid frames with identical error category.
+                   Render single error slide with range header (e.g. 'Planes: 1-25').
+                   Hold slide for 1.5 seconds (~45 frames) and write to video.
+        4. Release writer resource and output confirmation summary.
 
     Parameters
     ----------
     frames : list of (np.ndarray or None)
-        2D arrays (projection images), or None for invalid rows.
+        2D projection slices, or None for invalid rows.
     path : str
-        Output .mp4 file path.
+        Output .mp4 video file path.
     fps : int
-        Video frame rate (default 30).
+        Video playback frame rate (default 30).
     vmin, vmax : int
-        Value range for linear 8-bit normalization.
+        Volumetric intensity range for normalization.
     seconds_per_frame : float, optional
-        Duration in seconds to display each frame. If None, defaults to 1 frame
-        per slice (smooth playback at the specified fps).
+        Custom display duration per frame (if None, defaults to 1 frame per slice).
     labels : list of str, optional
-        Descriptive label for each entry in frames.
+        Identifiers displayed on valid slices and error slides.
     errors : list of (str or None), optional
-        Error messages for invalid planes, classified and displayed on error slides.
+        Error descriptions for invalid planes, classified and shown on slides.
     """
     if not frames:
         raise ValueError("No frames to write.")
@@ -180,7 +228,7 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
             f_min = float(frame.min())
             if f_max > f_min:
                 normalized = np.clip((frame.astype(float) - f_min) / (f_max - f_min) * 255.0, 0, 255).astype(np.uint8)
-                # Apply subtle unsharp masking to enhance micro-contrast and tissue edges
+                # Subtle unsharp masking for enhanced tissue and edge visibility
                 if normalized.shape[0] > 10 and normalized.shape[1] > 10:
                     blur = cv2.GaussianBlur(normalized, (0, 0), sigmaX=1.0)
                     sharpened = cv2.addWeighted(normalized, 1.35, blur, -0.35, 0)
@@ -195,7 +243,7 @@ def write(frames: list[np.ndarray | None], path: str, fps: int = 30,
             c_off = (max_cols - c) // 2
             padded[r_off : r_off + r, c_off : c_off + c] = normalized
 
-            # Small, discreet corner label tucked in the corner
+            # Small, discreet corner label tucked in the top-left
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 0.38
             thickness = 1

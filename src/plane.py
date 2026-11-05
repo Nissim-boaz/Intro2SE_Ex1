@@ -1,22 +1,33 @@
 """
 plane.py
 Represents and validates a projection plane defined by 3 or 4 3D points.
+Enforces geometric constraints for isosceles triangles and isosceles trapezoids.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-EPS = 0.001  # tolerance for distance comparisons
+EPS = 0.001  # Tolerance for distance comparisons and coplanarity checks
 
 
 def _dist(p: np.ndarray, q: np.ndarray) -> float:
+    """
+    Calculate the Euclidean distance between two 3D coordinates.
+
+    Args:
+        p (np.ndarray): First 3D point (x, y, z).
+        q (np.ndarray): Second 3D point (x, y, z).
+
+    Returns:
+        float: Euclidean distance ||p - q||.
+    """
     return float(np.linalg.norm(p - q))
 
 
 class Plane:
     """
-    A projection plane defined by an isosceles triangle (3 points)
+    A geometric projection plane defined by an isosceles triangle (3 points)
     or an isosceles trapezoid (4 points).
 
     Triangle  : apex=a,  base endpoints b, c.   dist(a,b) == dist(a,c).
@@ -26,6 +37,9 @@ class Plane:
 
     def __init__(self, points: list[np.ndarray]):
         """
+        Initialize and validate a plane from a list of 3 or 4 3D points.
+        Dispatches to triangle or trapezoid validation based on point count.
+
         Parameters
         ----------
         points : list of np.ndarray
@@ -34,7 +48,7 @@ class Plane:
         Raises
         ------
         ValueError
-            If the points do not form a valid isosceles triangle / trapezoid.
+            If points do not form a valid isosceles triangle or trapezoid.
         """
         if len(points) == 3:
             self._init_triangle(points)
@@ -44,10 +58,22 @@ class Plane:
             raise ValueError(f"A plane needs 3 or 4 points, got {len(points)}.")
 
     # ------------------------------------------------------------------
-    # Triangle
+    # Triangle Initialization & Validation
     # ------------------------------------------------------------------
 
-    def _init_triangle(self, pts):
+    def _init_triangle(self, pts: list[np.ndarray]) -> None:
+        """
+        Validate and initialize an isosceles triangle plane from 3 points.
+
+        Algorithm:
+            1. Compute edge lengths: dab = dist(a,b), dac = dist(a,c), dbc = dist(b,c).
+            2. Verify all edge lengths > EPS and points are not collinear.
+            3. Verify isosceles condition: |dab - dac| < EPS.
+            4. Set walker endpoints: a1=a, a2=a, b=b, c=c, Dab=dab, Dbc=dbc.
+
+        Args:
+            pts: List of 3 points [a, b, c] where a is the apex.
+        """
         a, b, c = [np.asarray(p, dtype=float) for p in pts]
 
         dab = _dist(a, b)
@@ -66,18 +92,32 @@ class Plane:
             )
 
         self.a1 = a
-        self.a2 = a          # both walkers start at the apex
+        self.a2 = a          # Both walkers start at the apex for a triangle
         self.b = b
         self.c = c
-        self.Dab = dab       # leg length (= Dac)
-        self.Dbc = dbc       # base length
+        self.Dab = dab       # Leg length (= Dac)
+        self.Dbc = dbc       # Base length
         self.is_trapezoid = False
 
     # ------------------------------------------------------------------
-    # Trapezoid
+    # Trapezoid Initialization & Validation
     # ------------------------------------------------------------------
 
-    def _init_trapezoid(self, pts):
+    def _init_trapezoid(self, pts: list[np.ndarray]) -> None:
+        """
+        Validate and initialize an isosceles trapezoid plane from 4 points.
+
+        Algorithm:
+            1. Compute leg lengths: da1b = dist(a1,b), da2c = dist(a2,c).
+            2. Verify non-zero leg lengths.
+            3. Verify equal legs (isosceles): |da1b - da2c| < EPS.
+            4. Verify base constraint: dist(a1,a2) <= dist(b,c) + EPS.
+            5. Verify 4-point coplanarity: normal(a1,b,c) dot (a2 - a1) < EPS.
+            6. Set walker endpoints: a1, a2, b, c, Dab=da1b, Dbc=dist(b,c).
+
+        Args:
+            pts: List of 4 points [a1, a2, b, c] defining top base and bottom base.
+        """
         a1, a2, b, c = [np.asarray(p, dtype=float) for p in pts]
 
         da1b = _dist(a1, b)
@@ -105,15 +145,16 @@ class Plane:
         self.a2 = a2
         self.b = b
         self.c = c
-        self.Dab = da1b      # leg length
-        self.Dbc = dbc       # bottom width
+        self.Dab = da1b      # Leg length
+        self.Dbc = dbc       # Bottom base width
         self.is_trapezoid = True
 
     # ------------------------------------------------------------------
-    # Convenience
+    # Representation
     # ------------------------------------------------------------------
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Return a readable string representation of the plane parameters."""
         kind = "trapezoid" if self.is_trapezoid else "triangle"
         return (
             f"Plane({kind}, a1={self.a1}, a2={self.a2}, "
@@ -121,17 +162,23 @@ class Plane:
         )
 
 
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Geometric Helper Functions
+# ----------------------------------------------------------------------
 
-def _are_collinear(a, b, c) -> bool:
-    """Return True if a, b, c are collinear (cross product ≈ 0)."""
+def _are_collinear(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> bool:
+    """
+    Check if three 3D points lie on the same straight line.
+    Evaluates whether the cross product of (b - a) and (c - a) is zero within EPS.
+    """
     return float(np.linalg.norm(np.cross(b - a, c - a))) < EPS
 
 
-def _are_coplanar(a1, a2, b, c) -> bool:
-    """Return True if four 3D points lie on the same plane."""
+def _are_coplanar(a1: np.ndarray, a2: np.ndarray, b: np.ndarray, c: np.ndarray) -> bool:
+    """
+    Check if four 3D points lie on the exact same geometric plane.
+    Computes unit normal from (a1, b, c) and checks distance of a2 to the plane.
+    """
     n = np.cross(b - a1, c - a1)
     norm = np.linalg.norm(n)
     if norm < EPS:
@@ -139,4 +186,3 @@ def _are_coplanar(a1, a2, b, c) -> bool:
     n /= norm
     # The fourth point (a2) must lie on the plane defined by a1, b, c
     return abs(float(np.dot(a2 - a1, n))) < EPS
-

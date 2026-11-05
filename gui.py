@@ -1,8 +1,8 @@
 """
 gui.py - Graphical interface for the 3D plane projection tool.
 
-Cross-platform (macOS, Windows, Linux).
-Uses tkinter which is built into Python - no extra installation needed.
+Cross-platform desktop application using Python's built-in tkinter.
+Allows selecting files via dialogs, tracking progress, and running projections.
 
 Launch:
     python gui.py
@@ -17,7 +17,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-# Ensure src/ is importable
+# Ensure src/ is importable from application directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.volume_loader import load
@@ -27,39 +27,42 @@ from src.video_writer import write
 
 
 class ProjectionApp:
-    def __init__(self, root):
+    """Main application window for the 3D plane projection desktop tool."""
+
+    def __init__(self, root: tk.Tk) -> None:
+        """Initialize window geometry, style themes, and interactive UI controls."""
         self.root = root
         self.root.title("3D Plane Projection Tool")
         self.root.resizable(False, False)
 
-        # -- Variables ------------------------------------------------
+        # -- File Path Variables --------------------------------------
         self.nrrd_path = tk.StringVar()
         self.csv_path = tk.StringVar()
         self.mp4_path = tk.StringVar()
 
-        # -- Layout ---------------------------------------------------
+        # -- UI Layout Configuration ----------------------------------
         pad = {"padx": 12, "pady": 6}
 
-        # Title
+        # Header Title
         title = tk.Label(root, text="3D Plane Projection", font=("Helvetica", 16, "bold"))
         title.grid(row=0, column=0, columnspan=3, pady=(16, 8))
 
-        # NRRD file
+        # NRRD file selection
         tk.Label(root, text="NRRD Volume File:").grid(row=1, column=0, sticky="w", **pad)
         tk.Entry(root, textvariable=self.nrrd_path, width=45).grid(row=1, column=1, **pad)
         tk.Button(root, text="Browse...", command=self._browse_nrrd).grid(row=1, column=2, **pad)
 
-        # CSV file
+        # CSV file selection
         tk.Label(root, text="Planes CSV File:").grid(row=2, column=0, sticky="w", **pad)
         tk.Entry(root, textvariable=self.csv_path, width=45).grid(row=2, column=1, **pad)
         tk.Button(root, text="Browse...", command=self._browse_csv).grid(row=2, column=2, **pad)
 
-        # Output MP4
+        # Output MP4 destination
         tk.Label(root, text="Output Video (.mp4):").grid(row=3, column=0, sticky="w", **pad)
         tk.Entry(root, textvariable=self.mp4_path, width=45).grid(row=3, column=1, **pad)
         tk.Button(root, text="Save As...", command=self._browse_mp4).grid(row=3, column=2, **pad)
 
-        # Separator
+        # Separator Line
         ttk.Separator(root, orient="horizontal").grid(row=4, column=0, columnspan=3, sticky="ew", pady=8)
 
         # Progress bar
@@ -70,16 +73,17 @@ class ProjectionApp:
         self.status_var = tk.StringVar(value="Ready. Select files and click Run.")
         tk.Label(root, textvariable=self.status_var, fg="gray").grid(row=6, column=0, columnspan=3, **pad)
 
-        # Run button
+        # Action Run button
         self.run_btn = tk.Button(
             root, text=">  Run Projection", font=("Helvetica", 13, "bold"),
             bg="#4CAF50", fg="white", command=self._start_run, height=2, width=20
         )
         self.run_btn.grid(row=7, column=0, columnspan=3, pady=(4, 16))
 
-    # -- File dialogs -------------------------------------------------
+    # -- File Dialog Handlers -----------------------------------------
 
-    def _browse_nrrd(self):
+    def _browse_nrrd(self) -> None:
+        """Open a file browser dialog to select an input .nrrd volume file."""
         path = filedialog.askopenfilename(
             title="Select NRRD Volume File",
             filetypes=[("NRRD files", "*.nrrd"), ("All files", "*.*")]
@@ -87,7 +91,8 @@ class ProjectionApp:
         if path:
             self.nrrd_path.set(path)
 
-    def _browse_csv(self):
+    def _browse_csv(self) -> None:
+        """Open a file browser dialog to select a plane definitions .csv file."""
         path = filedialog.askopenfilename(
             title="Select Planes CSV File",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
@@ -95,7 +100,8 @@ class ProjectionApp:
         if path:
             self.csv_path.set(path)
 
-    def _browse_mp4(self):
+    def _browse_mp4(self) -> None:
+        """Open a file save dialog to specify the target .mp4 video destination."""
         path = filedialog.asksaveasfilename(
             title="Save Output Video As",
             defaultextension=".mp4",
@@ -104,10 +110,13 @@ class ProjectionApp:
         if path:
             self.mp4_path.set(path)
 
-    # -- Run pipeline -------------------------------------------------
+    # -- Pipeline Execution -------------------------------------------
 
-    def _start_run(self):
-        """Validate inputs and launch the pipeline in a background thread."""
+    def _start_run(self) -> None:
+        """
+        Validate file paths and launch the projection pipeline in a background thread.
+        Keeps the UI responsive and animates the progress bar during computation.
+        """
         nrrd = self.nrrd_path.get().strip()
         csv_f = self.csv_path.get().strip()
         mp4 = self.mp4_path.get().strip()
@@ -129,16 +138,25 @@ class ProjectionApp:
             messagebox.showerror("File Not Found", f"CSV file not found:\n{csv_f}")
             return
 
-        # Disable button during run
+        # Disable button during execution
         self.run_btn.config(state="disabled")
         self.progress["value"] = 0
 
-        # Run in background thread so UI doesn't freeze
+        # Run pipeline in a daemon background thread
         thread = threading.Thread(target=self._run_pipeline, args=(nrrd, csv_f, mp4), daemon=True)
         thread.start()
 
-    def _run_pipeline(self, nrrd_path, csv_path, mp4_path):
-        """Execute the full projection pipeline (runs in background thread)."""
+    def _run_pipeline(self, nrrd_path: str, csv_path: str, mp4_path: str) -> None:
+        """
+        Execute the full projection pipeline and update GUI progress asynchronously.
+
+        Algorithm:
+            1. Load 3D volume using load(nrrd_path) and extract min/max intensity range.
+            2. Parse plane rows from CSV using parse_entries(csv_path).
+            3. Project each plane onto 2D image via project() and update progress bar.
+            4. Compile video with error slides and annotations via write().
+            5. Display success dialog with throughput (FPS) and runtime metrics.
+        """
         try:
             # Step 1: Load volume
             self._update_status("Loading NRRD volume...")
@@ -189,7 +207,7 @@ class ProjectionApp:
             write(frames, mp4_path, fps=30, vmin=vmin, vmax=vmax, labels=labels, errors=errors)
             self._update_progress(100)
 
-            # Done!
+            # Display final success summary
             result = (
                 f"Done!\n\n"
                 f"Total rows in CSV: {total}\n"
@@ -209,21 +227,24 @@ class ProjectionApp:
         finally:
             self.root.after(0, lambda: self.run_btn.config(state="normal"))
 
-    # -- Thread-safe UI updates ---------------------------------------
+    # -- Thread-safe UI Helpers ---------------------------------------
 
-    def _update_status(self, text):
+    def _update_status(self, text: str) -> None:
+        """Safely schedule a text update on the GUI status label."""
         self.root.after(0, lambda: self.status_var.set(text))
 
-    def _update_progress(self, value):
+    def _update_progress(self, value: int) -> None:
+        """Safely schedule a progress bar percentage update on the GUI."""
         self.root.after(0, lambda: self.progress.configure(value=value))
 
-    def _show_error(self, msg):
+    def _show_error(self, msg: str) -> None:
+        """Display an error dialog and reset the application state."""
         self.root.after(0, lambda: messagebox.showerror("Error", msg))
         self.root.after(0, lambda: self.status_var.set("Error occurred."))
         self.root.after(0, lambda: self.run_btn.config(state="normal"))
 
 
-# -- Main -------------------------------------------------------------
+# -- Application Launch -----------------------------------------------
 
 if __name__ == "__main__":
     root = tk.Tk()
