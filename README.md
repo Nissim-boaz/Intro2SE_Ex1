@@ -44,13 +44,7 @@ python gui.py
 
 ## Demo
 
-To generate the 15-second showcase demo on the MRHead volume:
-
-```bash
-python Ex0.py data/MRHead_1.nrrd data/head_demo.csv demo.mp4
-```
-
-The `head_demo.csv` file contains 315 valid planes across three sweeps (axial, oblique, coronal) and 3 deliberately introduced errors, demonstrating the full pipeline including error detection and grouped error slides.
+<video src="demo.mp4" controls width="100%"></video>
 
 ---
 
