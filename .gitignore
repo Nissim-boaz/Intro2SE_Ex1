@@ -7,9 +7,8 @@ __pycache__/
 dist/
 build/
 
-# Output videos (demo.mp4 is tracked intentionally for README embedding)
+# Output videos
 *.mp4
-!demo.mp4
 data/*.mp4
 
 # Environment

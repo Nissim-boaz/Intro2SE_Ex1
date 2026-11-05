@@ -43,7 +43,7 @@ python gui.py
 ---
 
 <p align="center">
-  <video src="demo.mp4" width="600" autoplay loop muted playsinline controls></video>
+  <video src="https://github.com/user-attachments/assets/5b4bcd41-cfc0-4ae9-b0e2-e67494c5df8e" width="600" autoplay loop muted playsinline controls></video>
   <br>
   <i>Demo: 3D volume plane projection in action</i>
 </p>
