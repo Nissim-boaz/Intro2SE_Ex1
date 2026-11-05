@@ -37,6 +37,10 @@ python Ex0.py file.nrrd file.csv file.mp4
 
 *Optional Desktop GUI:*
 ```bash
+
+https://github.com/user-attachments/assets/2b1f6136-fafc-44ba-a683-4130ff075a89
+
+
 python gui.py
 ```
 
