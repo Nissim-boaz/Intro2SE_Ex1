@@ -43,7 +43,7 @@ python gui.py
 ---
 
 <p align="center">
-  <img src="demo.gif" width="400" alt="Plane projection demo">
+  <img src="demo.gif" width="200" alt="Plane projection demo">
   <br>
   <i>Demo: 3D volume plane projection in action</i>
 </p>
