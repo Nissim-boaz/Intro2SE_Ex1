@@ -42,9 +42,11 @@ python gui.py
 
 ---
 
-## Demo
-
-<video src="demo.mp4" controls width="100%"></video>
+<p align="center">
+  <video src="demo.mp4" width="600" autoplay loop muted playsinline controls></video>
+  <br>
+  <i>Demo: 3D volume plane projection in action</i>
+</p>
 
 ---
 
