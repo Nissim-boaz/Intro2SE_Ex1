@@ -1,3 +1,6 @@
+
+
+
 # Ex1: Plane Projection of a 3D Volume
 
 **Course:** Introduction to Software Engineering (OOP/OOD), Ariel University  
@@ -43,7 +46,7 @@ python gui.py
 ---
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/2b1f6136-fafc-44ba-a683-4130ff075a89" width="600" autoplay loop muted playsinline controls></video>
+  <video src="https://github.com/user-attachments/assets/5b04c373-2602-41fb-b3bd-a82f5170110c" width="600" autoplay loop muted playsinline controls></video>
   <br>
   <i>Demo: 3D volume plane projection in action</i>
 </p>
