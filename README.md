@@ -37,17 +37,13 @@ python Ex0.py file.nrrd file.csv file.mp4
 
 *Optional Desktop GUI:*
 ```bash
-
-https://github.com/user-attachments/assets/2b1f6136-fafc-44ba-a683-4130ff075a89
-
-
 python gui.py
 ```
 
 ---
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/5b4bcd41-cfc0-4ae9-b0e2-e67494c5df8e" width="600" autoplay loop muted playsinline controls></video>
+  <video src="https://github.com/user-attachments/assets/2b1f6136-fafc-44ba-a683-4130ff075a89" width="600" autoplay loop muted playsinline controls></video>
   <br>
   <i>Demo: 3D volume plane projection in action</i>
 </p>
